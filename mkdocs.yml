@@ -1,0 +1,62 @@
+site_name: license-audit
+site_url: https://dgeragh.github.io/license-audit/
+site_description: Analyze dependency licenses and get actionable licensing guidance for Python projects
+repo_url: https://github.com/dgeragh/license-audit
+repo_name: dgeragh/license-audit
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            merge_init_into_class: true
+            show_signature_annotations: true
+            separate_signature: true
+
+extra:
+  version:
+    provider: mike
+
+nav:
+  - Home: index.md
+  - Changelog: CHANGELOG.md
+  - User Guide:
+      - Configuration: user-guide/configuration.md
+      - CI Integration: user-guide/ci-integration.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true

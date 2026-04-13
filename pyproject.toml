@@ -1,0 +1,127 @@
+[project]
+name = "license-audit"
+dynamic = ["version"]
+description = "Analyze dependency licenses and get actionable licensing guidance for Python projects"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Devin Geraghty" }]
+keywords = ["license", "compliance", "spdx", "dependencies", "oss"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "click>=8.1.0",
+    "pydantic>=2.5.0",
+    "rich>=13.0.0",
+    "license-expression>=30.0.0",
+    "packaging>=23.0",
+    "platformdirs>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dgeragh/license-audit"
+Repository = "https://github.com/dgeragh/license-audit"
+Documentation = "https://dgeragh.github.io/license-audit"
+Issues = "https://github.com/dgeragh/license-audit/issues"
+Changelog = "https://github.com/dgeragh/license-audit/blob/main/docs/CHANGELOG.md"
+
+[project.scripts]
+license-audit = "license_audit.cli.main:cli"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/license_audit/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/license_audit"]
+shared-data = { "THIRD_PARTY_NOTICES.md" = "license_audit/THIRD_PARTY_NOTICES.md" }
+
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.27.0",
+    "mike>=2.1.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+files = ["src"]
+strict = true
+disallow_untyped_defs = true
+disallow_any_unimported = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "YTT",
+    "S",
+    "B",
+    "A",
+    "C4",
+    "T10",
+    "SIM",
+    "I",
+    "C90",
+    "E",
+    "W",
+    "F",
+    "PGH",
+    "UP",
+    "RUF",
+    "TRY",
+]
+ignore = [
+    "E501",
+    "E731",
+    "TRY003",
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+"src/license_audit/environment/provision.py" = ["S603", "S607"]
+
+[[tool.mypy.overrides]]
+module = ["license_expression"]
+ignore_missing_imports = true
+
+[tool.ruff.format]
+preview = true
