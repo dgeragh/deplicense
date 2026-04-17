@@ -8,9 +8,10 @@ from typing import Any
 
 from license_audit.core.models import UNKNOWN_LICENSE, LicenseSource
 from license_audit.licenses.spdx import SpdxNormalizer
-from license_audit.util import load_metadata_from_site_packages
+from license_audit.util import MetadataReader
 
 _normalizer = SpdxNormalizer()
+_metadata_reader = MetadataReader()
 
 
 def detect_license(
@@ -50,7 +51,7 @@ def detect_license_from_path(
     if overrides and package_name in overrides:
         return overrides[package_name], LicenseSource.OVERRIDE
 
-    meta = load_metadata_from_site_packages(package_name, site_packages)
+    meta = _metadata_reader.read_metadata(package_name, site_packages)
     if meta is None:
         return UNKNOWN_LICENSE, LicenseSource.UNKNOWN
 

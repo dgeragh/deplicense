@@ -9,7 +9,9 @@ from packaging.requirements import InvalidRequirement, Requirement
 
 from license_audit.core.models import DependencyNode, PackageLicense
 from license_audit.licenses.detection import detect_license_from_path
-from license_audit.util import canonicalize, load_metadata_from_site_packages
+from license_audit.util import MetadataReader, canonicalize
+
+_metadata_reader = MetadataReader()
 
 
 def analyze_environment(
@@ -170,4 +172,4 @@ def _get_requires_dist_from_path(package_name: str, site_packages: Path) -> list
 
 def _load_metadata(package_name: str, site_packages: Path) -> Any | None:
     """Find and parse METADATA for a package in site-packages."""
-    return load_metadata_from_site_packages(package_name, site_packages)
+    return _metadata_reader.read_metadata(package_name, site_packages)

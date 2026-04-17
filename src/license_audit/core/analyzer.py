@@ -26,7 +26,7 @@ from license_audit.environment.provision import EnvironmentProvisioner, Provisio
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.factory import SourceFactory
-from license_audit.util import canonicalize, get_license_text
+from license_audit.util import MetadataReader, canonicalize
 
 
 @dataclass
@@ -107,6 +107,7 @@ class LicenseAuditor:
         normalizer: SpdxNormalizer | None = None,
         recommender: LicenseRecommender | None = None,
         policy: PolicyEngine | None = None,
+        metadata_reader: MetadataReader | None = None,
     ) -> None:
         self._matrix = matrix or CompatibilityMatrix()
         self._classifier = classifier or LicenseClassifier()
@@ -126,6 +127,7 @@ class LicenseAuditor:
             source_factory=self._sources,
             provisioner=self._provisioner,
         )
+        self._metadata_reader = metadata_reader or MetadataReader()
 
     def run(
         self,
@@ -259,7 +261,10 @@ class LicenseAuditor:
         env: ProvisionedEnv,
     ) -> None:
         for pkg in packages:
-            pkg.license_text = get_license_text(pkg.name, env.site_packages)
+            pkg.license_text = self._metadata_reader.read_license_text(
+                pkg.name,
+                env.site_packages,
+            )
 
     def _extract_spdx_ids(self, expressions: list[str]) -> list[str]:
         ids: set[str] = set()
