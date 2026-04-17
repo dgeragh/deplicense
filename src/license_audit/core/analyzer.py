@@ -24,13 +24,7 @@ from license_audit.environment.analyze import (
     analyze_environment,
     analyze_installed_packages,
 )
-from license_audit.environment.provision import (
-    ProvisionedEnv,
-    is_venv_dir,
-    provision_current_env,
-    provision_from_venv,
-    provision_temp_env,
-)
+from license_audit.environment.provision import EnvironmentProvisioner, ProvisionedEnv
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.factory import SourceFactory
@@ -45,6 +39,7 @@ _recommender = LicenseRecommender(
     normalizer=_normalizer,
 )
 _source_factory = SourceFactory()
+_provisioner = EnvironmentProvisioner()
 
 _POLICY_MAX_RANK: dict[PolicyLevel, int] = {
     PolicyLevel.PERMISSIVE: CATEGORY_RANK[LicenseCategory.PERMISSIVE],
@@ -66,8 +61,13 @@ class TargetInfo:
 class TargetResolver:
     """Classify a ``--target`` path as source file, venv, or project dir."""
 
-    def __init__(self, source_factory: SourceFactory | None = None) -> None:
+    def __init__(
+        self,
+        source_factory: SourceFactory | None = None,
+        provisioner: EnvironmentProvisioner | None = None,
+    ) -> None:
         self._sources = source_factory or SourceFactory()
+        self._provisioner = provisioner or EnvironmentProvisioner()
 
     def resolve(self, target: Path | None) -> TargetInfo:
         """Resolve ``target`` into a ``TargetInfo``. Raises ``FileNotFoundError``
@@ -82,7 +82,7 @@ class TargetResolver:
             self._sources.validate(resolved)
             return TargetInfo(source_path=resolved, config_dir=resolved.parent)
 
-        if is_venv_dir(resolved):
+        if self._provisioner.is_venv_dir(resolved):
             return TargetInfo(site_packages=resolved, config_dir=resolved.parent)
 
         if resolved.is_dir():
@@ -107,7 +107,7 @@ class TargetResolver:
         raise FileNotFoundError(msg)
 
 
-_target_resolver = TargetResolver(_source_factory)
+_target_resolver = TargetResolver(_source_factory, _provisioner)
 
 
 def analyze(
@@ -157,12 +157,12 @@ def analyze(
     specs: list[PackageSpec] | None = None
     env: ProvisionedEnv
     if info.site_packages is not None:
-        env = provision_from_venv(info.site_packages)
+        env = _provisioner.from_venv(info.site_packages)
     elif source is not None:
         specs = source.parse()
-        env = provision_temp_env(specs)
+        env = _provisioner.temp(specs)
     else:
-        env = provision_current_env()
+        env = _provisioner.current()
 
     with env:
         if specs is not None:
