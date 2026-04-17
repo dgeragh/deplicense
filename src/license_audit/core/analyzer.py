@@ -19,7 +19,7 @@ from license_audit.core.models import (
     PackageLicense,
     PolicyLevel,
 )
-from license_audit.core.recommender import recommend_licenses
+from license_audit.core.recommender import LicenseRecommender
 from license_audit.environment.analyze import (
     analyze_environment,
     analyze_installed_packages,
@@ -31,7 +31,7 @@ from license_audit.environment.provision import (
     provision_from_venv,
     provision_temp_env,
 )
-from license_audit.licenses.spdx import get_simple_licenses
+from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.pyproject import PyprojectSource
 from license_audit.sources.requirements import RequirementsSource
@@ -40,6 +40,12 @@ from license_audit.util import canonicalize, get_license_text
 
 _classifier = LicenseClassifier()
 _matrix = CompatibilityMatrix()
+_normalizer = SpdxNormalizer(matrix=_matrix)
+_recommender = LicenseRecommender(
+    matrix=_matrix,
+    classifier=_classifier,
+    normalizer=_normalizer,
+)
 
 _POLICY_MAX_RANK: dict[PolicyLevel, int] = {
     PolicyLevel.PERMISSIVE: CATEGORY_RANK[LicenseCategory.PERMISSIVE],
@@ -145,7 +151,7 @@ def analyze(
         dep_spdx_ids = _extract_spdx_ids(dep_licenses)
 
         # Check compatibility
-        recommended = recommend_licenses(dep_licenses)
+        recommended = _recommender.recommend(dep_licenses)
 
         # Find incompatible pairs among dependencies
         incompatible = _matrix.find_incompatible_pairs(dep_spdx_ids)
@@ -250,7 +256,7 @@ def _auto_detect_project(project_dir: Path) -> _TargetInfo:
 
 def _classify_package(pkg: PackageLicense) -> None:
     """Classify a package's license category."""
-    simple = get_simple_licenses(pkg.license_expression)
+    simple = _normalizer.get_simple_licenses(pkg.license_expression)
     if len(simple) == 1:
         pkg.category = _classifier.classify(simple[0])
     elif len(simple) > 1:
@@ -265,7 +271,7 @@ def _extract_spdx_ids(expressions: list[str]) -> list[str]:
     ids: set[str] = set()
     for expr in expressions:
         if expr != UNKNOWN_LICENSE:
-            for lic in get_simple_licenses(expr):
+            for lic in _normalizer.get_simple_licenses(expr):
                 ids.add(lic)
     return list(ids)
 
@@ -299,7 +305,7 @@ def _denied_license_items(
     items: list[ActionItem] = []
     denied_set = {d.lower() for d in denied_licenses}
     for pkg in packages:
-        for lic in get_simple_licenses(pkg.license_expression):
+        for lic in _normalizer.get_simple_licenses(pkg.license_expression):
             if lic.lower() in denied_set:
                 items.append(
                     ActionItem(
@@ -428,13 +434,13 @@ def _check_policy(
 
         # Check denied list
         if denied_set:
-            for lic in get_simple_licenses(pkg.license_expression):
+            for lic in _normalizer.get_simple_licenses(pkg.license_expression):
                 if lic.lower() in denied_set:
                     return False
 
         # Check allowed list (if specified, only these are allowed)
         if allowed_set:
-            for lic in get_simple_licenses(pkg.license_expression):
+            for lic in _normalizer.get_simple_licenses(pkg.license_expression):
                 if (
                     lic.lower() not in allowed_set
                     and pkg.license_expression != UNKNOWN_LICENSE
