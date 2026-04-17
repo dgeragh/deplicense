@@ -8,7 +8,7 @@ import click
 
 from license_audit.cli._common import resolve_config
 from license_audit.core.analyzer import LicenseAuditor
-from license_audit.reports.base import ReportRenderer
+from license_audit.reports.base import StringRenderer
 from license_audit.reports.json_report import JsonRenderer
 from license_audit.reports.markdown import MarkdownRenderer
 from license_audit.reports.notices import NoticesRenderer
@@ -38,7 +38,7 @@ def report_cmd(
 
     report = LicenseAuditor().run(target=target, config=config)
 
-    renderer: ReportRenderer
+    renderer: StringRenderer
     if output_format == "json":
         renderer = JsonRenderer()
     elif output_format == "notices":

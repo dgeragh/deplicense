@@ -6,7 +6,6 @@ import sys
 
 import click
 from rich.console import Console
-from rich.markup import escape
 
 from license_audit.cli._common import resolve_config
 from license_audit.config import LicenseAuditConfig
@@ -16,6 +15,10 @@ from license_audit.core.models import (
     AnalysisReport,
     LicenseCategory,
     PackageLicense,
+)
+from license_audit.reports._format import (
+    ActionItemFormatter,
+    IncompatiblePairFormatter,
 )
 
 
@@ -42,12 +45,12 @@ def _print_result(
     if exit_code == 1 and report.incompatible_pairs:
         console.print("[bold red]FAIL:[/bold red] Incompatible license pairs found.")
         for pair in report.incompatible_pairs:
-            console.print(f"  [red]\\[x][/red] {pair.inbound} <-> {pair.outbound}")
+            console.print(IncompatiblePairFormatter.rich(pair))
     elif exit_code == 1:
         console.print("[bold red]FAIL:[/bold red] License policy check failed.")
         for item in report.action_items:
             if item.severity == "error":
-                console.print(f"  [red]\\[x][/red] {escape(item.message)}")
+                console.print(ActionItemFormatter.rich(item))
     elif exit_code == 2:
         names = [p.name for p in unknown_pkgs]
         console.print(
@@ -61,7 +64,7 @@ def _print_result(
         console.print()
         console.print("[bold yellow]Warnings:[/bold yellow]")
         for item in warnings:
-            console.print(f"  [yellow]\\[!][/yellow] {escape(item.message)}")
+            console.print(ActionItemFormatter.rich(item))
 
     if exit_code == 0:
         console.print(

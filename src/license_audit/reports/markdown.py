@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 
 from license_audit.core.classifier import LicenseClassifier
 from license_audit.core.models import UNKNOWN_LICENSE, AnalysisReport, LicenseCategory
+from license_audit.reports._format import (
+    ActionItemFormatter,
+    IncompatiblePairFormatter,
+)
 
 
 class MarkdownRenderer:
@@ -108,7 +112,7 @@ class MarkdownRenderer:
             "|-----------|-----------|---------|",
         ]
         for pair in report.incompatible_pairs:
-            lines.append(f"| {pair.inbound} | {pair.outbound} | {pair.verdict.value} |")
+            lines.append(IncompatiblePairFormatter.markdown_row(pair))
         return "\n".join(lines) + "\n"
 
     def _recommendations(self, report: AnalysisReport) -> str:
@@ -158,9 +162,7 @@ class MarkdownRenderer:
 
         lines = ["\n## Action Items\n"]
         for item in report.action_items:
-            icon = "Warning" if item.severity == "warning" else "Error"
-            pkg_prefix = f"**{item.package}**: " if item.package else ""
-            lines.append(f"- [{icon}] {pkg_prefix}{item.message}")
+            lines.append(ActionItemFormatter.markdown(item))
         return "\n".join(lines) + "\n"
 
     def _footer(self) -> str:
