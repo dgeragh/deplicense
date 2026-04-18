@@ -1,4 +1,4 @@
-"""The `check` CLI command, license policy validation."""
+"""The `check` CLI command. Validates the configured license policy."""
 
 from __future__ import annotations
 
@@ -6,16 +6,18 @@ import sys
 
 import click
 from rich.console import Console
-from rich.markup import escape
 
-from license_audit.cli._common import resolve_config
+from license_audit.cli._common import resolve_config, run_audit
 from license_audit.config import LicenseAuditConfig
-from license_audit.core.analyzer import analyze
 from license_audit.core.models import (
     UNKNOWN_LICENSE,
     AnalysisReport,
     LicenseCategory,
     PackageLicense,
+)
+from license_audit.reports._format import (
+    ActionItemFormatter,
+    IncompatiblePairFormatter,
 )
 
 
@@ -24,12 +26,15 @@ def _determine_exit_code(
     unknown_pkgs: list[PackageLicense],
     config: LicenseAuditConfig,
 ) -> int:
+    # Incompatible pairs always fail the check.
     if report.incompatible_pairs:
         return 1
-    if report.policy_passed is False:
-        return 1
+    # Unknowns with fail-on-unknown get their own code (2) so CI can
+    # distinguish "we couldn't detect a license" from "policy violated".
     if unknown_pkgs and config.fail_on_unknown:
         return 2
+    if report.policy_passed is False:
+        return 1
     return 0
 
 
@@ -42,12 +47,12 @@ def _print_result(
     if exit_code == 1 and report.incompatible_pairs:
         console.print("[bold red]FAIL:[/bold red] Incompatible license pairs found.")
         for pair in report.incompatible_pairs:
-            console.print(f"  [red]\\[x][/red] {pair.inbound} <-> {pair.outbound}")
+            console.print(IncompatiblePairFormatter.rich(pair))
     elif exit_code == 1:
         console.print("[bold red]FAIL:[/bold red] License policy check failed.")
         for item in report.action_items:
             if item.severity == "error":
-                console.print(f"  [red]\\[x][/red] {escape(item.message)}")
+                console.print(ActionItemFormatter.rich(item))
     elif exit_code == 2:
         names = [p.name for p in unknown_pkgs]
         console.print(
@@ -55,13 +60,13 @@ def _print_result(
             f"with undetected licenses: {', '.join(names)}"
         )
 
-    # Always print warnings (actionable guidance regardless of pass/fail)
+    # Warnings are printed regardless of pass/fail since they're actionable.
     warnings = [i for i in report.action_items if i.severity == "warning"]
     if warnings:
         console.print()
         console.print("[bold yellow]Warnings:[/bold yellow]")
         for item in warnings:
-            console.print(f"  [yellow]\\[!][/yellow] {escape(item.message)}")
+            console.print(ActionItemFormatter.rich(item))
 
     if exit_code == 0:
         console.print(
@@ -90,7 +95,7 @@ def check_cmd(ctx: click.Context, fail_on_unknown: bool | None) -> None:
     if fail_on_unknown is not None:
         config.fail_on_unknown = fail_on_unknown
 
-    report = analyze(target=target, config=config)
+    report = run_audit(target, config)
 
     unknown_pkgs = [
         p

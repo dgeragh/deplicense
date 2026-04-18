@@ -1,94 +1,88 @@
-"""License recommendation engine.
-
-Given a set of dependency licenses, determines valid outbound licenses
-and ranks them by permissiveness.
-"""
+"""Recommend outbound licenses compatible with a set of dependencies."""
 
 from __future__ import annotations
 
-from license_audit.core.classifier import classify
-from license_audit.core.compatibility import find_compatible_outbound
+from license_expression import OR
+
+from license_audit.core.classifier import LicenseClassifier
+from license_audit.core.compatibility import CompatibilityMatrix
 from license_audit.core.models import CATEGORY_RANK, UNKNOWN_LICENSE
-from license_audit.licenses.spdx import get_simple_licenses
-
-# Well known permissive licenses in preference order
-_PREFERRED_PERMISSIVE = [
-    "MIT",
-    "Apache-2.0",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
-    "ISC",
-    "0BSD",
-    "Unlicense",
-]
+from license_audit.licenses.spdx import SpdxNormalizer
 
 
-def recommend_licenses(
-    dependency_licenses: list[str],
-) -> list[str]:
-    """Recommend outbound licenses based on dependency licenses.
+class LicenseRecommender:
+    """Picks compatible outbound licenses ranked by permissiveness."""
 
-    Resolves OR expressions by picking the most permissive alternative,
-    then finds all compatible outbound licenses, sorted by permissiveness.
+    PREFERRED_PERMISSIVE: list[str] = [
+        "MIT",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ISC",
+        "0BSD",
+        "Unlicense",
+    ]
 
-    Args:
-        dependency_licenses: SPDX expressions of all dependencies.
+    def __init__(
+        self,
+        matrix: CompatibilityMatrix | None = None,
+        classifier: LicenseClassifier | None = None,
+        normalizer: SpdxNormalizer | None = None,
+    ) -> None:
+        self._matrix = matrix or CompatibilityMatrix()
+        self._classifier = classifier or LicenseClassifier()
+        self._normalizer = normalizer or SpdxNormalizer(matrix=self._matrix)
 
-    Returns:
-        List of valid outbound SPDX license identifiers, sorted from
-        most permissive to least permissive.
-    """
-    # Resolve compound expressions to simple license lists
-    resolved = _resolve_inbound(dependency_licenses)
+    def recommend(self, dependency_licenses: list[str]) -> list[str]:
+        """Compatible outbound licenses, most permissive first."""
+        resolved = self.resolve_inbound(dependency_licenses)
+        if not resolved:
+            return self.PREFERRED_PERMISSIVE.copy()
 
-    if not resolved:
-        # No dependencies, everything is available
-        return _PREFERRED_PERMISSIVE.copy()
+        compatible = self._matrix.find_compatible_outbound(resolved)
+        return sorted(
+            compatible,
+            key=lambda lic: (
+                CATEGORY_RANK.get(self._classifier.classify(lic), 5),
+                lic,
+            ),
+        )
 
-    compatible = find_compatible_outbound(resolved)
+    def find_minimum(self, dependency_licenses: list[str]) -> str | None:
+        """The single most permissive compatible outbound license, or None."""
+        recommended = self.recommend(dependency_licenses)
+        if not recommended:
+            return None
+        return recommended[0]
 
-    # Sort by permissiveness, then alphabetically
-    return sorted(
-        compatible,
-        key=lambda lic: (CATEGORY_RANK.get(classify(lic), 5), lic),
-    )
+    def resolve_inbound(self, expressions: list[str]) -> list[str]:
+        """Flatten SPDX expressions into a deduplicated list of licenses.
 
+        OR reduces to the most permissive branch, AND keeps every component,
+        and UNKNOWN is dropped. OR/AND is detected via the parsed AST so
+        whitespace and casing in the raw text don't matter.
+        """
+        resolved: set[str] = set()
+        for expr in expressions:
+            if expr == UNKNOWN_LICENSE:
+                continue
 
-def find_minimum_license(dependency_licenses: list[str]) -> str | None:
-    """Find the most permissive outbound license that satisfies all dependencies.
+            simple = self._normalizer.get_simple_licenses(expr)
+            if len(simple) == 1:
+                resolved.add(simple[0])
+                continue
 
-    Returns None if no compatible license exists (conflicting deps).
-    """
-    recommended = recommend_licenses(dependency_licenses)
-    if not recommended:
-        return None
-    return recommended[0]
+            parsed = self._normalizer.parse_expression(expr)
+            if isinstance(parsed, OR):
+                best = min(
+                    simple,
+                    key=lambda lic: CATEGORY_RANK.get(
+                        self._classifier.classify(lic),
+                        5,
+                    ),
+                )
+                resolved.add(best)
+            else:
+                resolved.update(simple)
 
-
-def _resolve_inbound(expressions: list[str]) -> list[str]:
-    """Resolve a list of SPDX expressions to individual licenses.
-
-    For OR expressions, picks the most permissive alternative.
-    For AND expressions, includes all components.
-    Deduplicates the result.
-    """
-    resolved: set[str] = set()
-    for expr in expressions:
-        if expr == UNKNOWN_LICENSE:
-            continue
-
-        simple = get_simple_licenses(expr)
-        if len(simple) == 1:
-            resolved.add(simple[0])
-        elif " OR " in expr:
-            # Pick the most permissive alternative
-            best = min(
-                simple,
-                key=lambda lic: CATEGORY_RANK.get(classify(lic), 5),
-            )
-            resolved.add(best)
-        else:
-            # AND: include all
-            resolved.update(simple)
-
-    return list(resolved)
+        return list(resolved)

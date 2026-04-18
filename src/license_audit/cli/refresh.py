@@ -1,4 +1,4 @@
-"""The `refresh` CLI command, update bundled OSADL data."""
+"""The `refresh` CLI command. Updates the cached OSADL data."""
 
 from __future__ import annotations
 
@@ -7,47 +7,53 @@ from pathlib import Path
 from urllib.request import urlopen
 
 import click
-import platformdirs
 from rich.console import Console
 
-_MATRIX_URL = "https://www.osadl.org/fileadmin/checklists/matrix.json"
-_COPYLEFT_URL = "https://www.osadl.org/fileadmin/checklists/copyleft.json"
-
-_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+from license_audit._data import OSADLDataStore
 
 
-def get_cache_dir() -> Path:
-    """Return the user-writable cache directory for OSADL data."""
-    return Path(platformdirs.user_cache_dir("license_audit")) / "osadl"
+class OSADLRefresher:
+    """Downloads the latest OSADL matrix and copyleft data into the user cache."""
+
+    MATRIX_URL = "https://www.osadl.org/fileadmin/checklists/matrix.json"
+    COPYLEFT_URL = "https://www.osadl.org/fileadmin/checklists/copyleft.json"
+    MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+    TIMEOUT_SECONDS = 30
+
+    def __init__(self, store: OSADLDataStore | None = None) -> None:
+        self._store = store or OSADLDataStore()
+
+    def refresh(self, console: Console) -> None:
+        """Download both OSADL files and reload the data store."""
+        data_path = self._store.cache_dir()
+        data_path.mkdir(parents=True, exist_ok=True)
+
+        console.print("Downloading OSADL compatibility matrix...")
+        self.download(self.MATRIX_URL, data_path / self._store.MATRIX_FILE)
+        console.print("[green]\\[/][/green] matrix.json updated")
+
+        console.print("Downloading OSADL copyleft data...")
+        self.download(self.COPYLEFT_URL, data_path / self._store.COPYLEFT_FILE)
+        console.print("[green]\\[/][/green] copyleft.json updated")
+
+        self._store.reload()
+
+        console.print(f"\nData saved to {data_path}")
+        console.print("[bold green]OSADL data refreshed successfully.[/bold green]")
+
+    def download(self, url: str, dest: Path) -> None:
+        """Download `url` to `dest`, rejecting oversized or invalid payloads."""
+        with urlopen(url, timeout=self.TIMEOUT_SECONDS) as resp:  # noqa: S310
+            data = resp.read(self.MAX_RESPONSE_BYTES + 1)
+        if len(data) > self.MAX_RESPONSE_BYTES:
+            msg = f"Response from {url} exceeds {self.MAX_RESPONSE_BYTES} bytes"
+            raise RuntimeError(msg)
+        # Parse before writing so malformed data never lands in the cache.
+        json.loads(data)
+        dest.write_bytes(data)
 
 
 @click.command("refresh")
 def refresh_cmd() -> None:
     """Download the latest OSADL compatibility data."""
-    console = Console()
-
-    data_path = get_cache_dir()
-    data_path.mkdir(parents=True, exist_ok=True)
-
-    console.print("Downloading OSADL compatibility matrix...")
-    _download(str(_MATRIX_URL), data_path / "osadl_matrix.json")
-    console.print("[green]\\[/][/green] matrix.json updated")
-
-    console.print("Downloading OSADL copyleft data...")
-    _download(str(_COPYLEFT_URL), data_path / "copyleft.json")
-    console.print("[green]\\[/][/green] copyleft.json updated")
-
-    console.print(f"\nData saved to {data_path}")
-    console.print("[bold green]OSADL data refreshed successfully.[/bold green]")
-
-
-def _download(url: str, dest: Path) -> None:
-    """Download a URL to a file, validating the response."""
-    with urlopen(url, timeout=30) as resp:  # noqa: S310
-        data = resp.read(_MAX_RESPONSE_BYTES + 1)
-    if len(data) > _MAX_RESPONSE_BYTES:
-        msg = f"Response from {url} exceeds {_MAX_RESPONSE_BYTES} bytes"
-        raise RuntimeError(msg)
-    # Validate that the response is valid JSON before writing
-    json.loads(data)
-    dest.write_bytes(data)
+    OSADLRefresher().refresh(Console())

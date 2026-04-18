@@ -1,7 +1,4 @@
-"""Configuration management for license_audit.
-
-Reads [tool.license-audit] from pyproject.toml.
-"""
+"""Load the [tool.license-audit] section from pyproject.toml."""
 
 from __future__ import annotations
 
@@ -12,12 +9,47 @@ from pydantic import BaseModel, Field, field_validator
 
 from license_audit.core.models import PolicyLevel
 
-_VALID_GROUP_PREFIXES = ("optional:", "group:")
-_VALID_GROUP_LITERALS = ("main", "dev")
+
+class GroupSpec:
+    """Valid dependency-group selectors.
+
+    A selector is either a literal ('main', 'dev') or a prefixed name like
+    'optional:docs' or 'group:test'.
+    """
+
+    PREFIXES: tuple[str, ...] = ("optional:", "group:")
+    LITERALS: tuple[str, ...] = ("main", "dev")
+
+    @classmethod
+    def validate(cls, entry: str) -> None:
+        """Raise ValueError if `entry` isn't a valid selector."""
+        if entry in cls.LITERALS:
+            return
+        for prefix in cls.PREFIXES:
+            if entry.startswith(prefix):
+                if not entry[len(prefix) :]:
+                    msg = (
+                        f"Invalid dependency group: '{entry}' "
+                        f"(missing name after prefix)"
+                    )
+                    raise ValueError(msg)
+                return
+        msg = (
+            f"Invalid dependency group: '{entry}'. "
+            f"Must be 'main', 'dev', 'optional:<name>', or 'group:<name>'."
+        )
+        raise ValueError(msg)
+
+    @classmethod
+    def validate_list(cls, entries: list[str]) -> list[str]:
+        """Validate every entry and return the list unchanged."""
+        for entry in entries:
+            cls.validate(entry)
+        return entries
 
 
 class LicenseAuditConfig(BaseModel):
-    """Configuration from [tool.license-audit] in pyproject.toml."""
+    """Parsed [tool.license-audit] section."""
 
     fail_on_unknown: bool = True
     policy: PolicyLevel = PolicyLevel.PERMISSIVE
@@ -37,29 +69,11 @@ class LicenseAuditConfig(BaseModel):
         if not isinstance(value, list):
             msg = "dependency_groups must be a list of strings"
             raise TypeError(msg)
-        for entry in value:
-            if entry in _VALID_GROUP_LITERALS:
-                continue
-            if any(entry.startswith(p) for p in _VALID_GROUP_PREFIXES):
-                # Ensure there's a name after the prefix
-                prefix = next(p for p in _VALID_GROUP_PREFIXES if entry.startswith(p))
-                if not entry[len(prefix) :]:
-                    msg = f"Invalid dependency group: '{entry}' (missing name after prefix)"
-                    raise ValueError(msg)
-                continue
-            msg = (
-                f"Invalid dependency group: '{entry}'. "
-                f"Must be 'main', 'dev', 'optional:<name>', or 'group:<name>'."
-            )
-            raise ValueError(msg)
-        return value
+        return GroupSpec.validate_list(value)
 
 
 def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
-    """Load configuration from pyproject.toml in the given directory.
-
-    Falls back to defaults if no config section is found.
-    """
+    """Load config from pyproject.toml, or return defaults if none found."""
     if config_dir is None:
         config_dir = Path.cwd()
 
@@ -74,7 +88,7 @@ def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
     if not tool_config:
         return LicenseAuditConfig()
 
-    # Normalize kebab-case keys to snake_case
+    # pyproject convention is kebab-case; Pydantic fields are snake_case.
     normalized: dict[str, object] = {}
     for key, value in tool_config.items():
         normalized[key.replace("-", "_")] = value
@@ -83,7 +97,7 @@ def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
 
 
 def get_project_name(config_dir: Path | None = None) -> str:
-    """Read the project name from pyproject.toml."""
+    """Read [project].name from pyproject.toml, or 'unknown' if missing."""
     if config_dir is None:
         config_dir = Path.cwd()
 

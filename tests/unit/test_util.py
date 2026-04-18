@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from license_audit.util import get_license_text
+from license_audit.util import MetadataReader
+
+
+def get_license_text(package_name: str, site_packages: Path) -> str | None:
+    return MetadataReader().read_license_text(package_name, site_packages)
 
 
 def _make_dist_info(
@@ -193,3 +197,31 @@ class TestGetLicenseText:
 
     def test_empty_site_packages(self, tmp_path: Path) -> None:
         assert get_license_text("anything", tmp_path) is None
+
+
+class TestMetadataReader:
+    def test_read_metadata_returns_parsed_headers(self, tmp_path: Path) -> None:
+        _make_dist_info(tmp_path, "mypkg", "1.2.3")
+        reader = MetadataReader()
+        meta = reader.read_metadata("mypkg", tmp_path)
+        assert meta is not None
+        assert meta.get("Name") == "mypkg"
+        assert meta.get("Version") == "1.2.3"
+
+    def test_read_metadata_missing_package(self, tmp_path: Path) -> None:
+        assert MetadataReader().read_metadata("nope", tmp_path) is None
+
+    def test_read_metadata_canonicalizes_name(self, tmp_path: Path) -> None:
+        _make_dist_info(tmp_path, "my_cool_pkg", "1.0.0")
+        reader = MetadataReader()
+        assert reader.read_metadata("my-cool-pkg", tmp_path) is not None
+        assert reader.read_metadata("My.Cool.Pkg", tmp_path) is not None
+
+    def test_read_license_text_delegates(self, tmp_path: Path) -> None:
+        _make_dist_info(
+            tmp_path,
+            "lic_pkg",
+            "1.0.0",
+            license_files={"LICENSE": "Text body"},
+        )
+        assert MetadataReader().read_license_text("lic_pkg", tmp_path) == "Text body"

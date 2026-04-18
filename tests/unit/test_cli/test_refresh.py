@@ -3,33 +3,43 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
+from license_audit._data import OSADLDataStore
 from license_audit.cli.main import cli
-from license_audit.cli.refresh import _download, get_cache_dir
+from license_audit.cli.refresh import OSADLRefresher
 
 
 class TestRefreshCmd:
-    def test_downloads_both_files(self, tmp_path):
+    def test_downloads_both_files(self, tmp_path: Path) -> None:
+        store = OSADLDataStore()
         with (
-            patch("license_audit.cli.refresh.get_cache_dir", return_value=tmp_path),
-            patch("license_audit.cli.refresh._download") as mock_dl,
+            patch.object(OSADLDataStore, "cache_dir", return_value=tmp_path),
+            patch.object(OSADLRefresher, "download") as mock_dl,
+            patch.object(OSADLDataStore, "reload") as mock_reload,
+            patch(
+                "license_audit.cli.refresh.OSADLDataStore",
+                return_value=store,
+            ),
         ):
             result = CliRunner().invoke(cli, ["refresh"])
 
         assert result.exit_code == 0
         assert mock_dl.call_count == 2
+        mock_reload.assert_called_once()
         assert "matrix.json updated" in result.output
         assert "copyleft.json updated" in result.output
         assert "refreshed successfully" in result.output
 
-    def test_creates_cache_directory(self, tmp_path):
+    def test_creates_cache_directory(self, tmp_path: Path) -> None:
         cache_dir = tmp_path / "sub" / "osadl"
         with (
-            patch("license_audit.cli.refresh.get_cache_dir", return_value=cache_dir),
-            patch("license_audit.cli.refresh._download"),
+            patch.object(OSADLDataStore, "cache_dir", return_value=cache_dir),
+            patch.object(OSADLRefresher, "download"),
         ):
             result = CliRunner().invoke(cli, ["refresh"])
 
@@ -38,57 +48,52 @@ class TestRefreshCmd:
 
 
 class TestDownload:
-    def test_writes_valid_json(self, tmp_path):
-        data = json.dumps({"key": "value"}).encode()
+    def _make_response(self, payload: bytes) -> MagicMock:
         mock_resp = MagicMock()
-        mock_resp.read.return_value = data
+        mock_resp.read.return_value = payload
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
+        return mock_resp
 
+    def test_writes_valid_json(self, tmp_path: Path) -> None:
+        data = json.dumps({"key": "value"}).encode()
         dest = tmp_path / "test.json"
-        with patch("license_audit.cli.refresh.urlopen", return_value=mock_resp):
-            _download("https://example.com/test.json", dest)
+        with patch(
+            "license_audit.cli.refresh.urlopen",
+            return_value=self._make_response(data),
+        ):
+            OSADLRefresher().download("https://example.com/test.json", dest)
 
         assert dest.exists()
         assert json.loads(dest.read_text()) == {"key": "value"}
 
-    def test_rejects_oversized_response(self, tmp_path):
-        import pytest
-
-        large_data = b"x" * (10 * 1024 * 1024 + 2)
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = large_data
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
+    def test_rejects_oversized_response(self, tmp_path: Path) -> None:
+        large = b"x" * (OSADLRefresher.MAX_RESPONSE_BYTES + 2)
         dest = tmp_path / "test.json"
         with (
-            patch("license_audit.cli.refresh.urlopen", return_value=mock_resp),
+            patch(
+                "license_audit.cli.refresh.urlopen",
+                return_value=self._make_response(large),
+            ),
             pytest.raises(RuntimeError, match="exceeds"),
         ):
-            _download("https://example.com/test.json", dest)
+            OSADLRefresher().download("https://example.com/test.json", dest)
 
         assert not dest.exists()
 
-    def test_rejects_invalid_json(self, tmp_path):
-        import pytest
-
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b"not json at all"
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-
+    def test_rejects_invalid_json(self, tmp_path: Path) -> None:
         dest = tmp_path / "test.json"
         with (
-            patch("license_audit.cli.refresh.urlopen", return_value=mock_resp),
+            patch(
+                "license_audit.cli.refresh.urlopen",
+                return_value=self._make_response(b"not json at all"),
+            ),
             pytest.raises(json.JSONDecodeError),
         ):
-            _download("https://example.com/test.json", dest)
+            OSADLRefresher().download("https://example.com/test.json", dest)
 
-    def test_network_error(self, tmp_path):
+    def test_network_error(self, tmp_path: Path) -> None:
         from urllib.error import URLError
-
-        import pytest
 
         dest = tmp_path / "test.json"
         with (
@@ -98,11 +103,18 @@ class TestDownload:
             ),
             pytest.raises(URLError),
         ):
-            _download("https://example.com/test.json", dest)
+            OSADLRefresher().download("https://example.com/test.json", dest)
 
 
-class TestGetCacheDir:
-    def test_returns_path(self):
-        result = get_cache_dir()
-        assert "license_audit" in str(result)
-        assert "osadl" in str(result)
+class TestRefreshReloadsStore:
+    def test_refresh_invokes_store_reload(self, tmp_path: Path) -> None:
+        store = OSADLDataStore()
+        with (
+            patch.object(store, "cache_dir", return_value=tmp_path),
+            patch.object(store, "reload") as mock_reload,
+            patch.object(OSADLRefresher, "download"),
+        ):
+            refresher = OSADLRefresher(store=store)
+            refresher.refresh(console=MagicMock())
+
+        mock_reload.assert_called_once()

@@ -7,8 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from license_audit.core.models import UNKNOWN_LICENSE, LicenseSource
-from license_audit.licenses.spdx import normalize, normalize_classifier
-from license_audit.util import load_metadata_from_site_packages
+from license_audit.licenses.spdx import SpdxNormalizer
+from license_audit.util import MetadataReader
+
+_normalizer = SpdxNormalizer()
+_metadata_reader = MetadataReader()
 
 
 def detect_license(
@@ -48,7 +51,7 @@ def detect_license_from_path(
     if overrides and package_name in overrides:
         return overrides[package_name], LicenseSource.OVERRIDE
 
-    meta = load_metadata_from_site_packages(package_name, site_packages)
+    meta = _metadata_reader.read_metadata(package_name, site_packages)
     if meta is None:
         return UNKNOWN_LICENSE, LicenseSource.UNKNOWN
 
@@ -78,7 +81,7 @@ def _detect_from_metadata(meta: Any) -> tuple[str, LicenseSource]:
 def _try_pep639(meta: Any) -> tuple[str, LicenseSource] | None:
     license_expr = meta.get("License-Expression")
     if license_expr and license_expr.strip().upper() != UNKNOWN_LICENSE:
-        normalized = normalize(license_expr)
+        normalized = _normalizer.normalize(license_expr)
         if normalized != UNKNOWN_LICENSE:
             return normalized, LicenseSource.PEP639
     return None
@@ -87,7 +90,7 @@ def _try_pep639(meta: Any) -> tuple[str, LicenseSource] | None:
 def _try_license_field(meta: Any) -> tuple[str, LicenseSource] | None:
     license_field = meta.get("License")
     if license_field and license_field.strip().upper() not in ("UNKNOWN", "", "NONE"):
-        normalized = normalize(license_field)
+        normalized = _normalizer.normalize(license_field)
         if normalized != UNKNOWN_LICENSE:
             return normalized, LicenseSource.METADATA
     return None
@@ -98,7 +101,7 @@ def _try_classifiers(meta: Any) -> tuple[str, LicenseSource] | None:
     license_classifiers = [c for c in classifiers if c.startswith("License ::")]
     spdx_from_classifiers: list[str] = []
     for cls in license_classifiers:
-        spdx = normalize_classifier(cls)
+        spdx = _normalizer.normalize_classifier(cls)
         if spdx:
             spdx_from_classifiers.append(spdx)
 

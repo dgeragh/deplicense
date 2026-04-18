@@ -1,4 +1,4 @@
-"""Environment provisioning for license analysis."""
+"""Attach to or create the Python environment we audit."""
 
 from __future__ import annotations
 
@@ -19,17 +19,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProvisionedEnv:
-    """A provisioned Python environment ready for license analysis.
+    """A Python environment ready for analysis.
 
-    Use as a context manager to ensure temp environments are cleaned up.
+    Used as a context manager so temp environments are always cleaned up.
     """
 
     site_packages: Path
     _tmp_dir: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
 
     def cleanup(self) -> None:
-        """Clean up the temporary environment, if any."""
+        """Remove the temporary environment if one was created."""
         if self._tmp_dir is not None:
+            atexit.unregister(self._tmp_dir.cleanup)
             self._tmp_dir.cleanup()
             self._tmp_dir = None
 
@@ -40,187 +41,165 @@ class ProvisionedEnv:
         self.cleanup()
 
 
-def provision_current_env() -> ProvisionedEnv:
-    """Use the current Python environment for analysis.
+class EnvironmentProvisioner:
+    """Creates or attaches to the Python environment we analyze."""
 
-    No temporary directory is created.
-    """
-    site_packages = Path(sysconfig.get_path("purelib"))
-    return ProvisionedEnv(site_packages=site_packages)
+    INSTALL_TIMEOUT_SECONDS: int = 30
 
+    def current(self) -> ProvisionedEnv:
+        """Use the interpreter running license_audit itself."""
+        site_packages = Path(sysconfig.get_path("purelib"))
+        return ProvisionedEnv(site_packages=site_packages)
 
-def provision_from_venv(venv_path: Path) -> ProvisionedEnv:
-    """Use an existing virtual environment for analysis.
+    def from_venv(self, venv_path: Path) -> ProvisionedEnv:
+        """Attach to an existing virtualenv at `venv_path`.
 
-    Args:
-        venv_path: Path to a .venv or virtualenv directory.
+        Raises FileNotFoundError when no site-packages directory is found.
+        """
+        sp = self._find_site_packages(venv_path)
+        if sp is None:
+            msg = f"No site-packages directory found in {venv_path}"
+            raise FileNotFoundError(msg)
+        return ProvisionedEnv(site_packages=sp)
 
-    Raises:
-        FileNotFoundError: If no site-packages directory is found.
-    """
-    sp = _find_site_packages(venv_path)
-    if sp is None:
-        msg = f"No site-packages directory found in {venv_path}"
-        raise FileNotFoundError(msg)
-    return ProvisionedEnv(site_packages=sp)
+    def temp(self, specs: list[PackageSpec]) -> ProvisionedEnv:
+        """Build a temp virtualenv with `uv` and install `specs` into it.
 
+        atexit cleanup is registered immediately after the temp dir is
+        created so an exception during venv setup can't leak the directory.
+        """
+        if not self.check_uv_available():
+            msg = (
+                "license_audit requires 'uv' to analyze external projects. "
+                "Install it with: pip install uv"
+            )
+            raise RuntimeError(msg)
 
-def provision_temp_env(specs: list[PackageSpec]) -> ProvisionedEnv:
-    """Create a temporary virtual environment and install packages.
+        tmp_dir = tempfile.TemporaryDirectory(prefix="license_audit_")
+        atexit.register(tmp_dir.cleanup)
 
-    Uses uv for fast environment creation and package installation.
-
-    Args:
-        specs: Package specifications to install.
-
-    Raises:
-        RuntimeError: If uv is not available or installation fails.
-    """
-    if not check_uv_available():
-        msg = (
-            "license_audit requires 'uv' to analyze external projects. "
-            "Install it with: pip install uv"
-        )
-        raise RuntimeError(msg)
-
-    tmp_dir = tempfile.TemporaryDirectory(prefix="license_audit_")
-    # Safety net: clean up even if context manager is bypassed
-    atexit.register(tmp_dir.cleanup)
-
-    venv_path = Path(tmp_dir.name) / ".venv"
-
-    try:
-        subprocess.run(
-            ["uv", "venv", str(venv_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-        if specs:
-            python_path = _find_python(venv_path)
-            _install_specs(specs, python_path)
-    except subprocess.CalledProcessError as e:
-        tmp_dir.cleanup()
-        msg = (
-            f"Failed to provision environment: {e.stderr or e.stdout or str(e)}\n"
-            "Check your network connection and that all packages exist on PyPI."
-        )
-        raise RuntimeError(msg) from e
-
-    sp = _find_site_packages(venv_path)
-    if sp is None:
-        tmp_dir.cleanup()
-        msg = f"No site-packages found in provisioned environment at {venv_path}"
-        raise RuntimeError(msg)
-
-    return ProvisionedEnv(site_packages=sp, _tmp_dir=tmp_dir)
-
-
-def _install_specs(specs: list[PackageSpec], python_path: Path) -> None:
-    """Install package specs, falling back to individual installs on failure."""
-    base_cmd = [
-        "uv",
-        "pip",
-        "install",
-        "--prerelease",
-        "allow",
-        "--python",
-        str(python_path),
-    ]
-    install_args = [_spec_to_install_arg(s) for s in specs]
-
-    result = subprocess.run(
-        [*base_cmd, *install_args],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return
-
-    # Batch install failed -- fall back to installing one-by-one so that
-    # unpublished / dev-only versions don't block the entire run.
-    logger.debug("Batch install failed, falling back to individual installs")
-    for spec in specs:
-        arg = _spec_to_install_arg(spec)
-        per_pkg = subprocess.run(
-            [*base_cmd, arg],
-            capture_output=True,
-            text=True,
-        )
-        if per_pkg.returncode != 0:
-            # Try again without the version pin, we still get license metadata
-            fallback = subprocess.run(
-                [*base_cmd, spec.name],
+        try:
+            venv_path = Path(tmp_dir.name) / ".venv"
+            subprocess.run(
+                ["uv", "venv", str(venv_path)],
+                check=True,
                 capture_output=True,
                 text=True,
             )
-            if fallback.returncode != 0:
-                logger.warning(
-                    "Could not install '%s', skipping (license info will be unavailable)",
-                    arg,
+
+            if specs:
+                python_path = self._find_python(venv_path)
+                self._install_specs(specs, python_path)
+
+            sp = self._find_site_packages(venv_path)
+        except subprocess.CalledProcessError as e:
+            atexit.unregister(tmp_dir.cleanup)
+            tmp_dir.cleanup()
+            msg = (
+                f"Failed to provision environment: {e.stderr or e.stdout or str(e)}\n"
+                "Check your network connection and that all packages exist on PyPI."
+            )
+            raise RuntimeError(msg) from e
+        except BaseException:
+            atexit.unregister(tmp_dir.cleanup)
+            tmp_dir.cleanup()
+            raise
+
+        if sp is None:
+            atexit.unregister(tmp_dir.cleanup)
+            tmp_dir.cleanup()
+            msg = f"No site-packages found in provisioned environment at {venv_path}"
+            raise RuntimeError(msg)
+
+        return ProvisionedEnv(site_packages=sp, _tmp_dir=tmp_dir)
+
+    def check_uv_available(self) -> bool:
+        """True if `uv` is on PATH."""
+        return shutil.which("uv") is not None
+
+    def is_venv_dir(self, path: Path) -> bool:
+        """True if `path` looks like a virtualenv: site-packages present, no pyproject."""
+        if not path.is_dir():
+            return False
+        if (path / "pyproject.toml").exists():
+            return False
+        return self._find_site_packages(path) is not None
+
+    def _install_specs(self, specs: list[PackageSpec], python_path: Path) -> None:
+        base_cmd = [
+            "uv",
+            "pip",
+            "install",
+            "--prerelease",
+            "allow",
+            "--python",
+            str(python_path),
+        ]
+        install_args = [self._spec_to_install_arg(s) for s in specs]
+
+        result = subprocess.run(
+            [*base_cmd, *install_args],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return
+
+        # Batch install failed. Fall back to per-package installs so one
+        # unpublished or dev-only version doesn't block the entire run.
+        logger.debug("Batch install failed, falling back to individual installs")
+        for spec in specs:
+            arg = self._spec_to_install_arg(spec)
+            per_pkg = subprocess.run([*base_cmd, arg], capture_output=True, text=True)
+            if per_pkg.returncode != 0:
+                fallback = subprocess.run(
+                    [*base_cmd, spec.name],
+                    capture_output=True,
+                    text=True,
                 )
-            else:
-                logger.warning(
-                    "Exact version %s not available; "
-                    "installed latest release instead (license may differ)",
-                    arg,
-                )
+                if fallback.returncode != 0:
+                    logger.warning(
+                        "Could not install '%s', skipping (license info will be unavailable)",
+                        arg,
+                    )
+                else:
+                    logger.warning(
+                        "Exact version %s not available; "
+                        "installed latest release instead (license may differ)",
+                        arg,
+                    )
 
+    @staticmethod
+    def _spec_to_install_arg(spec: PackageSpec) -> str:
+        """Format a PackageSpec as a positional arg for `uv pip install`."""
+        if spec.source_url:
+            return f"{spec.name} @ {spec.source_url}"
+        return f"{spec.name}{spec.version_constraint}"
 
-def _spec_to_install_arg(spec: PackageSpec) -> str:
-    """Convert a PackageSpec to a pip install argument.
+    @staticmethod
+    def _find_python(venv_path: Path) -> Path:
+        """Locate the Python binary inside a virtualenv."""
+        python = venv_path / "bin" / "python"
+        if python.exists():
+            return python
+        python = venv_path / "Scripts" / "python.exe"
+        if python.exists():
+            return python
+        msg = f"Python executable not found in {venv_path}"
+        raise FileNotFoundError(msg)
 
-    Uses ``name @ url`` for URL/git sources (PEP 508), otherwise falls
-    back to name + version constraint for registry packages.
-    """
-    if spec.source_url:
-        return f"{spec.name} @ {spec.source_url}"
-    return f"{spec.name}{spec.version_constraint}"
+    @staticmethod
+    def _find_site_packages(venv_path: Path) -> Path | None:
+        """Locate the site-packages dir inside a virtualenv, or None."""
+        lib_dir = venv_path / "lib"
+        if lib_dir.is_dir():
+            for child in lib_dir.iterdir():
+                sp = child / "site-packages"
+                if sp.is_dir():
+                    return sp
 
+        sp = venv_path / "Lib" / "site-packages"
+        if sp.is_dir():
+            return sp
 
-def check_uv_available() -> bool:
-    """Check if uv is available on PATH."""
-    return shutil.which("uv") is not None
-
-
-def _find_python(venv_path: Path) -> Path:
-    """Find the Python executable in a virtual environment."""
-    # Unix
-    python = venv_path / "bin" / "python"
-    if python.exists():
-        return python
-    # Windows
-    python = venv_path / "Scripts" / "python.exe"
-    if python.exists():
-        return python
-    msg = f"Python executable not found in {venv_path}"
-    raise FileNotFoundError(msg)
-
-
-def _find_site_packages(venv_path: Path) -> Path | None:
-    """Find the site-packages directory in a virtual environment."""
-    # Unix: .venv/lib/pythonX.Y/site-packages
-    lib_dir = venv_path / "lib"
-    if lib_dir.is_dir():
-        for child in lib_dir.iterdir():
-            sp = child / "site-packages"
-            if sp.is_dir():
-                return sp
-
-    # Windows: .venv/Lib/site-packages
-    sp = venv_path / "Lib" / "site-packages"
-    if sp.is_dir():
-        return sp
-
-    return None
-
-
-def is_venv_dir(path: Path) -> bool:
-    """Check if a directory looks like a virtual environment."""
-    if not path.is_dir():
-        return False
-    # Must have site-packages but NOT be a project root (no pyproject.toml)
-    if (path / "pyproject.toml").exists():
-        return False
-    return _find_site_packages(path) is not None
+        return None

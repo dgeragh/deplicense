@@ -49,14 +49,14 @@ class TestRecommendCli:
             packages=[_MIT_PKG],
             recommended_licenses=["MIT", "Apache-2.0"],
         )
-        with patch("license_audit.cli.recommend.analyze", return_value=report):
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["recommend"])
         assert result.exit_code == 0
         assert "test-project" in result.output
 
     def test_no_packages(self) -> None:
         report = _make_report(packages=[])
-        with patch("license_audit.cli.recommend.analyze", return_value=report):
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["recommend"])
         assert result.exit_code == 0
         assert "No dependencies found" in result.output
@@ -66,7 +66,7 @@ class TestRecommendCli:
             packages=[_GPL_PKG],
             recommended_licenses=[],
         )
-        with patch("license_audit.cli.recommend.analyze", return_value=report):
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["recommend"])
         assert result.exit_code == 0
         assert "No compatible" in result.output
@@ -87,7 +87,7 @@ class TestRecommendActionItems:
                 message="Copyleft license detected.",
             )
         ]
-        with patch("license_audit.cli.recommend.analyze", return_value=report):
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["recommend"])
         assert result.exit_code == 0
         assert "Action items" in result.output
@@ -106,7 +106,7 @@ class TestRecommendActionItems:
                 verdict=Verdict.INCOMPATIBLE,
             )
         ]
-        with patch("license_audit.cli.recommend.analyze", return_value=report):
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["recommend"])
         assert result.exit_code == 0
         assert "GPL-2.0-only" in result.output
@@ -118,11 +118,13 @@ class TestRecommendPolicyFlag:
             packages=[_MIT_PKG],
             recommended_licenses=["MIT"],
         )
-        with patch("license_audit.cli.recommend.analyze", return_value=report) as mock:
+        with patch(
+            "license_audit.cli.recommend.run_audit", return_value=report
+        ) as mock:
             result = CliRunner().invoke(
                 cli, ["--policy", "network-copyleft", "recommend"]
             )
         assert result.exit_code == 0
-        config = mock.call_args.kwargs.get("config") or mock.call_args[1].get("config")
+        config = mock.call_args.args[1]
         assert config is not None
         assert config.policy == "network-copyleft"

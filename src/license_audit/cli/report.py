@@ -1,4 +1,4 @@
-"""The `report` CLI command, generate compliance documents."""
+"""The `report` CLI command. Generates compliance documents."""
 
 from __future__ import annotations
 
@@ -6,9 +6,8 @@ from pathlib import Path
 
 import click
 
-from license_audit.cli._common import resolve_config
-from license_audit.core.analyzer import analyze
-from license_audit.reports.base import ReportRenderer
+from license_audit.cli._common import resolve_config, run_audit
+from license_audit.reports.base import StringRenderer
 from license_audit.reports.json_report import JsonRenderer
 from license_audit.reports.markdown import MarkdownRenderer
 from license_audit.reports.notices import NoticesRenderer
@@ -36,9 +35,9 @@ def report_cmd(
     """Generate a license compliance report."""
     target, config = resolve_config(ctx)
 
-    report = analyze(target=target, config=config)
+    report = run_audit(target, config)
 
-    renderer: ReportRenderer
+    renderer: StringRenderer
     if output_format == "json":
         renderer = JsonRenderer()
     elif output_format == "notices":
