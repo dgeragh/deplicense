@@ -7,7 +7,7 @@ from license_audit.core.models import LicenseCategory
 
 
 class LicenseClassifier:
-    """Map SPDX license IDs to a ``LicenseCategory`` using OSADL data."""
+    """Maps SPDX license IDs to a LicenseCategory using OSADL copyleft data."""
 
     COPYLEFT_MAP: dict[str, LicenseCategory] = {
         "Yes": LicenseCategory.STRONG_COPYLEFT,
@@ -27,7 +27,7 @@ class LicenseClassifier:
         self._store = store or OSADLDataStore()
 
     def classify(self, spdx_id: str) -> LicenseCategory:
-        """Classify an SPDX license identifier."""
+        """Classify an SPDX license by its copyleft strength."""
         if self.is_network_copyleft(spdx_id):
             return LicenseCategory.NETWORK_COPYLEFT
 
@@ -38,5 +38,5 @@ class LicenseClassifier:
         return LicenseCategory.UNKNOWN
 
     def is_network_copyleft(self, spdx_id: str) -> bool:
-        """Return True if the SPDX id is in the AGPL network-copyleft family."""
+        """True for the AGPL family."""
         return spdx_id in self.NETWORK_COPYLEFT

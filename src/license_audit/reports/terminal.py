@@ -14,7 +14,7 @@ from license_audit.reports._format import (
 
 
 class TerminalRenderer:
-    """Render analysis report to a Rich console."""
+    """Renders an analysis report to a Rich console."""
 
     CATEGORY_COLORS: dict[LicenseCategory, str] = {
         LicenseCategory.PERMISSIVE: "green",
@@ -29,7 +29,7 @@ class TerminalRenderer:
         self._console = console or Console()
 
     def render(self, report: AnalysisReport) -> None:
-        """Write the report to the attached console."""
+        """Write `report` to the attached console."""
         self._render_header(report)
         self._render_package_table(report)
         self._render_compatibility(report)

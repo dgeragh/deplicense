@@ -1,4 +1,4 @@
-"""Shared utilities for license_audit."""
+"""Shared utilities for package name handling and metadata reading."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from typing import Any
 def canonicalize(name: str) -> str:
     """Canonicalize a package name per PEP 503.
 
-    Lowercases the name and replaces hyphens and dots with underscores,
-    producing a normalized form suitable for comparison and lookup.
+    Lowercases and maps hyphens and dots to underscores so names compare
+    equal regardless of how they were written on PyPI.
     """
     return name.lower().replace("-", "_").replace(".", "_")
 
 
 class MetadataReader:
-    """Read METADATA and license files from a site-packages directory."""
+    """Reads METADATA and license files out of a site-packages directory."""
 
     LICENSE_FILE_PATTERNS: tuple[str, ...] = (
         "LICENSE*",
@@ -30,10 +30,10 @@ class MetadataReader:
         self._parser = HeaderParser()
 
     def read_metadata(self, package_name: str, site_packages: Path) -> Any | None:
-        """Parse METADATA for ``package_name`` under ``site_packages``.
+        """Parse METADATA for `package_name` under `site_packages`.
 
-        Returns parsed email-style headers, or ``None`` if no matching
-        ``*.dist-info/METADATA`` file is found.
+        Returns the parsed email-style headers, or None if no matching
+        `*.dist-info/METADATA` file exists.
         """
         dist_info = self._find_dist_info(package_name, site_packages)
         if dist_info is None:
@@ -48,11 +48,11 @@ class MetadataReader:
         package_name: str,
         site_packages: Path,
     ) -> str | None:
-        """Return the concatenated license-file text for ``package_name``.
+        """Concatenated license-file text for `package_name`.
 
-        Prefers files declared in PEP 639 ``License-File`` metadata; falls
-        back to common filename patterns. Returns ``None`` if no license
-        files are found.
+        Prefers files declared in PEP 639 `License-File` metadata, falling
+        back to common filename patterns like LICENSE, COPYING, NOTICE.
+        Returns None if no license files are found.
         """
         dist_info = self._find_dist_info(package_name, site_packages)
         if dist_info is None:
@@ -83,8 +83,8 @@ class MetadataReader:
         meta = self._parser.parsestr(metadata_file.read_text(encoding="utf-8"))
         texts: list[str] = []
         for lf in meta.get_all("License-File") or []:
-            # PEP 639 stores files under licenses/ but the metadata value
-            # is the relative filename without the subdirectory prefix.
+            # PEP 639 keeps the file under licenses/ but stores only the
+            # bare filename in metadata, so check both locations.
             for candidate in (dist_info / lf, dist_info / "licenses" / lf):
                 if candidate.is_file():
                     texts.append(

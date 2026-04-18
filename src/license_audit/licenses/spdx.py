@@ -1,8 +1,4 @@
-"""SPDX license expression normalization.
-
-Handles the messy reality of PyPI license strings and normalizes them
-to proper SPDX identifiers using the license-expression library.
-"""
+"""Normalize messy PyPI license strings into SPDX identifiers."""
 
 from __future__ import annotations
 
@@ -15,9 +11,9 @@ from license_audit.core.models import UNKNOWN_LICENSE
 
 
 class SpdxNormalizer:
-    """Normalize loose license strings to SPDX identifiers."""
+    """Converts loose license strings into canonical SPDX identifiers."""
 
-    # Common non-SPDX strings found on PyPI -> SPDX identifiers.
+    # Non-SPDX strings commonly found on PyPI mapped to their SPDX equivalents.
     COMMON_ALIASES: dict[str, str] = {
         # BSD variants
         "bsd": "BSD-3-Clause",
@@ -94,9 +90,8 @@ class SpdxNormalizer:
         "cc0-1.0": "CC0-1.0",
     }
 
-    # Deprecated SPDX IDs -> current equivalents.
-    # The license-expression library parses these successfully, but the OSADL
-    # matrix uses the modern "-only"/"-or-later" forms.
+    # Deprecated SPDX IDs mapped to the modern "-only"/"-or-later" forms used
+    # by the OSADL matrix. license-expression still parses the old forms.
     DEPRECATED_SPDX: dict[str, str] = {
         "GPL-1.0": "GPL-1.0-only",
         "GPL-1.0+": "GPL-1.0-or-later",
@@ -115,7 +110,7 @@ class SpdxNormalizer:
         "AGPL-3.0+": "AGPL-3.0-or-later",
     }
 
-    # Trove classifier -> SPDX.
+    # Trove classifiers mapped to SPDX identifiers.
     CLASSIFIER_MAP: dict[str, str] = {
         "License :: OSI Approved :: MIT License": "MIT",
         "License :: OSI Approved :: BSD License": "BSD-3-Clause",
@@ -149,10 +144,11 @@ class SpdxNormalizer:
         self._known_ids: frozenset[str] | None = None
 
     def known_spdx_ids(self) -> frozenset[str]:
-        """Return every SPDX id the normalizer can evaluate as valid.
+        """SPDX ids recognized as valid.
 
-        Combines OSADL matrix keys with the targets of our alias/classifier/
-        deprecated maps so that ids like CC0-1.0 are still recognized.
+        Combines the matrix keys with the values in our alias, classifier,
+        and deprecated-id maps so ids like CC0-1.0 are still recognized
+        even when they're absent from the matrix.
         """
         if self._known_ids is None:
             ids: set[str] = set(self._matrix.known_licenses())
@@ -163,12 +159,10 @@ class SpdxNormalizer:
         return self._known_ids
 
     def normalize(self, license_string: str) -> str:
-        """Normalize a license string to an SPDX expression.
+        """Normalize a license string to an SPDX expression, or UNKNOWN.
 
-        Tries in order:
-        1. Lookup in COMMON_ALIASES (case-insensitive).
-        2. Direct parse as valid SPDX expression.
-        3. Return "UNKNOWN".
+        Tries the alias table first (case-insensitive), then falls back to
+        direct SPDX parsing.
         """
         stripped = license_string.strip()
         if not stripped or stripped.upper() in (UNKNOWN_LICENSE, "NONE", ""):
@@ -191,21 +185,21 @@ class SpdxNormalizer:
         return UNKNOWN_LICENSE
 
     def normalize_classifier(self, classifier: str) -> str | None:
-        """Convert a trove classifier to an SPDX identifier, or None if unknown."""
+        """SPDX id for a trove classifier, or None if no mapping exists."""
         return self.CLASSIFIER_MAP.get(classifier)
 
     def parse_expression(self, expr: str) -> Any:
-        """Parse an SPDX expression, returning None on failure."""
+        """Parse an SPDX expression into an AST, or None on failure."""
         try:
             return self._licensing.parse(expr)
         except ExpressionError:
             return None
 
     def get_simple_licenses(self, expr: str) -> list[str]:
-        """Extract individual license identifiers from a compound expression.
+        """Split a compound expression into its component license ids.
 
-        Deprecated SPDX IDs are mapped to their modern equivalents.
-        Unparseable input returns ``[expr]`` unchanged.
+        Deprecated ids are promoted to their modern equivalents. If the
+        expression can't be parsed, returns it unchanged as a single-item list.
         """
         parsed = self.parse_expression(expr)
         if parsed is None:

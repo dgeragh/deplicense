@@ -1,4 +1,4 @@
-"""The `check` CLI command, license policy validation."""
+"""The `check` CLI command. Validates the configured license policy."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def _print_result(
             f"with undetected licenses: {', '.join(names)}"
         )
 
-    # Always print warnings (actionable guidance regardless of pass/fail)
+    # Warnings are printed regardless of pass/fail since they're actionable.
     warnings = [i for i in report.action_items if i.severity == "warning"]
     if warnings:
         console.print()

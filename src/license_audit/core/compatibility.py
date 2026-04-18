@@ -1,4 +1,4 @@
-"""License compatibility engine using the OSADL matrix."""
+"""License compatibility checks backed by the OSADL matrix."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from license_audit.core.models import CompatibilityResult, Verdict
 
 
 class CompatibilityMatrix:
-    """Query the OSADL license compatibility matrix."""
+    """Looks up inbound/outbound license compatibility from the OSADL matrix."""
 
     VERDICT_MAP: dict[str, Verdict] = {
         "Yes": Verdict.COMPATIBLE,
@@ -23,14 +23,14 @@ class CompatibilityMatrix:
         self._store = store or OSADLDataStore()
 
     def known_licenses(self) -> list[str]:
-        """Return the list of licenses known to the OSADL matrix."""
+        """All licenses the matrix can answer for."""
         return self._store.known_licenses()
 
     def raw_verdict(self, outbound: str, inbound: str) -> str:
-        """Look up the raw OSADL verdict string.
+        """Raw OSADL string (e.g. 'Yes', 'No', 'Same').
 
-        The matrix is indexed as matrix[outbound][inbound]. Missing entries
-        fall back to ``"Unknown"``.
+        The matrix is indexed as matrix[outbound][inbound]. Missing rows
+        or cells fall back to 'Unknown'.
         """
         row = self._store.matrix().get(outbound)
         if row is None:
@@ -38,16 +38,16 @@ class CompatibilityMatrix:
         return row.get(inbound, "Unknown")
 
     def is_compatible(self, inbound: str, outbound: str) -> CompatibilityResult:
-        """Return the compatibility verdict for an inbound-outbound pair."""
+        """Check whether a project licensed `outbound` can use a dep licensed `inbound`."""
         raw = self.raw_verdict(outbound, inbound)
         verdict = self.VERDICT_MAP.get(raw, Verdict.UNKNOWN)
         return CompatibilityResult(inbound=inbound, outbound=outbound, verdict=verdict)
 
     def find_compatible_outbound(self, inbound_licenses: list[str]) -> list[str]:
-        """Return every outbound license compatible with all evaluable inbound licenses.
+        """Outbound licenses compatible with every evaluable inbound license.
 
-        Inbound licenses absent from the matrix are skipped; they cannot
-        constrain the recommendation and are surfaced separately as UNKNOWN.
+        Inbounds absent from the matrix are skipped; those surface as UNKNOWN
+        elsewhere so they don't block the recommendation here.
         """
         matrix = self._store.matrix()
         all_outbound = list(matrix.keys())
@@ -66,7 +66,7 @@ class CompatibilityMatrix:
         ]
 
     def find_incompatible_pairs(self, licenses: list[str]) -> list[CompatibilityResult]:
-        """Return pairs of licenses that no outbound license can accommodate together."""
+        """Pairs of licenses with no common outbound license."""
         matrix = self._store.matrix()
         evaluable = [lic for lic in licenses if lic in matrix]
         all_outbound = list(matrix.keys())

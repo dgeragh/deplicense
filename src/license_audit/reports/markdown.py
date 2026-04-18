@@ -13,7 +13,7 @@ from license_audit.reports._format import (
 
 
 class MarkdownRenderer:
-    """Render analysis report as a Markdown compliance document."""
+    """Renders a report as a Markdown compliance document."""
 
     def __init__(self, classifier: LicenseClassifier | None = None) -> None:
         self._classifier = classifier or LicenseClassifier()

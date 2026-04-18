@@ -1,8 +1,8 @@
-"""Protocols for report renderers.
+"""Renderer protocols.
 
 String renderers return the full output so callers can write it to a file
 or echo it. Console renderers write directly to a Rich console and return
-``None`` — they cannot be captured as a string without a recording console.
+None; their output can only be captured via a recording console.
 """
 
 from __future__ import annotations
@@ -13,16 +13,16 @@ from license_audit.core.models import AnalysisReport
 
 
 class StringRenderer(Protocol):
-    """Renderer that returns the report as a string."""
+    """Renders a report and returns it as a string."""
 
     def render(self, report: AnalysisReport) -> str:
-        """Render an analysis report to a string."""
+        """Render `report` and return it as a string."""
         ...
 
 
 class ConsoleRenderer(Protocol):
-    """Renderer that writes directly to a Rich console."""
+    """Writes a report directly to a Rich console."""
 
     def render(self, report: AnalysisReport) -> None:
-        """Render an analysis report to the attached console."""
+        """Render `report` to the attached console."""
         ...

@@ -1,8 +1,4 @@
-"""License recommendation engine.
-
-Given a set of dependency licenses, determines valid outbound licenses
-and ranks them by permissiveness.
-"""
+"""Recommend outbound licenses compatible with a set of dependencies."""
 
 from __future__ import annotations
 
@@ -15,9 +11,8 @@ from license_audit.licenses.spdx import SpdxNormalizer
 
 
 class LicenseRecommender:
-    """Recommend compatible outbound licenses for a project."""
+    """Picks compatible outbound licenses ranked by permissiveness."""
 
-    # Well-known permissive licenses in preference order.
     PREFERRED_PERMISSIVE: list[str] = [
         "MIT",
         "Apache-2.0",
@@ -39,7 +34,7 @@ class LicenseRecommender:
         self._normalizer = normalizer or SpdxNormalizer(matrix=self._matrix)
 
     def recommend(self, dependency_licenses: list[str]) -> list[str]:
-        """Return compatible outbound licenses sorted by permissiveness."""
+        """Compatible outbound licenses, most permissive first."""
         resolved = self.resolve_inbound(dependency_licenses)
         if not resolved:
             return self.PREFERRED_PERMISSIVE.copy()
@@ -54,22 +49,18 @@ class LicenseRecommender:
         )
 
     def find_minimum(self, dependency_licenses: list[str]) -> str | None:
-        """Return the most permissive compatible outbound license, or None."""
+        """The single most permissive compatible outbound license, or None."""
         recommended = self.recommend(dependency_licenses)
         if not recommended:
             return None
         return recommended[0]
 
     def resolve_inbound(self, expressions: list[str]) -> list[str]:
-        """Resolve a list of SPDX expressions to a deduplicated license list.
+        """Flatten SPDX expressions into a deduplicated list of licenses.
 
-        * OR expressions collapse to their most permissive alternative.
-        * AND expressions include every component.
-        * ``UNKNOWN`` expressions are skipped.
-
-        OR/AND detection is done against the parsed license-expression AST
-        rather than by substring match, so it is robust to whitespace
-        or casing quirks in the raw expression.
+        OR reduces to the most permissive branch, AND keeps every component,
+        and UNKNOWN is dropped. OR/AND is detected via the parsed AST so
+        whitespace and casing in the raw text don't matter.
         """
         resolved: set[str] = set()
         for expr in expressions:

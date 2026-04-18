@@ -1,7 +1,4 @@
-"""Configuration management for license_audit.
-
-Reads [tool.license-audit] from pyproject.toml.
-"""
+"""Load the [tool.license-audit] section from pyproject.toml."""
 
 from __future__ import annotations
 
@@ -14,10 +11,10 @@ from license_audit.core.models import PolicyLevel
 
 
 class GroupSpec:
-    """Valid dependency-group selectors for ``[tool.license-audit]``.
+    """Valid dependency-group selectors.
 
-    A group entry is either a literal (``main``, ``dev``) or a prefixed
-    name (``optional:<name>``, ``group:<name>``).
+    A selector is either a literal ('main', 'dev') or a prefixed name like
+    'optional:docs' or 'group:test'.
     """
 
     PREFIXES: tuple[str, ...] = ("optional:", "group:")
@@ -25,7 +22,7 @@ class GroupSpec:
 
     @classmethod
     def validate(cls, entry: str) -> None:
-        """Raise ``ValueError`` if ``entry`` is not a valid group selector."""
+        """Raise ValueError if `entry` isn't a valid selector."""
         if entry in cls.LITERALS:
             return
         for prefix in cls.PREFIXES:
@@ -45,14 +42,14 @@ class GroupSpec:
 
     @classmethod
     def validate_list(cls, entries: list[str]) -> list[str]:
-        """Validate every entry in ``entries``; return the list unchanged."""
+        """Validate every entry and return the list unchanged."""
         for entry in entries:
             cls.validate(entry)
         return entries
 
 
 class LicenseAuditConfig(BaseModel):
-    """Configuration from [tool.license-audit] in pyproject.toml."""
+    """Parsed [tool.license-audit] section."""
 
     fail_on_unknown: bool = True
     policy: PolicyLevel = PolicyLevel.PERMISSIVE
@@ -76,10 +73,7 @@ class LicenseAuditConfig(BaseModel):
 
 
 def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
-    """Load configuration from pyproject.toml in the given directory.
-
-    Falls back to defaults if no config section is found.
-    """
+    """Load config from pyproject.toml, or return defaults if none found."""
     if config_dir is None:
         config_dir = Path.cwd()
 
@@ -94,7 +88,7 @@ def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
     if not tool_config:
         return LicenseAuditConfig()
 
-    # Normalize kebab-case keys to snake_case
+    # pyproject convention is kebab-case; Pydantic fields are snake_case.
     normalized: dict[str, object] = {}
     for key, value in tool_config.items():
         normalized[key.replace("-", "_")] = value
@@ -103,7 +97,7 @@ def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:
 
 
 def get_project_name(config_dir: Path | None = None) -> str:
-    """Read the project name from pyproject.toml."""
+    """Read [project].name from pyproject.toml, or 'unknown' if missing."""
     if config_dir is None:
         config_dir = Path.cwd()
 

@@ -1,4 +1,4 @@
-"""Environment provisioning for license analysis."""
+"""Attach to or create the Python environment we audit."""
 
 from __future__ import annotations
 
@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProvisionedEnv:
-    """A provisioned Python environment ready for license analysis.
+    """A Python environment ready for analysis.
 
-    Use as a context manager to ensure temp environments are cleaned up.
+    Used as a context manager so temp environments are always cleaned up.
     """
 
     site_packages: Path
     _tmp_dir: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
 
     def cleanup(self) -> None:
-        """Clean up the temporary environment, if any."""
+        """Remove the temporary environment if one was created."""
         if self._tmp_dir is not None:
             atexit.unregister(self._tmp_dir.cleanup)
             self._tmp_dir.cleanup()
@@ -42,19 +42,19 @@ class ProvisionedEnv:
 
 
 class EnvironmentProvisioner:
-    """Create / attach to Python environments used for license inspection."""
+    """Creates or attaches to the Python environment we analyze."""
 
     INSTALL_TIMEOUT_SECONDS: int = 30
 
     def current(self) -> ProvisionedEnv:
-        """Analyze the current Python environment; no temp dir created."""
+        """Use the interpreter running license_audit itself."""
         site_packages = Path(sysconfig.get_path("purelib"))
         return ProvisionedEnv(site_packages=site_packages)
 
     def from_venv(self, venv_path: Path) -> ProvisionedEnv:
-        """Attach to an existing virtualenv.
+        """Attach to an existing virtualenv at `venv_path`.
 
-        Raises ``FileNotFoundError`` if no site-packages dir can be found.
+        Raises FileNotFoundError when no site-packages directory is found.
         """
         sp = self._find_site_packages(venv_path)
         if sp is None:
@@ -63,11 +63,10 @@ class EnvironmentProvisioner:
         return ProvisionedEnv(site_packages=sp)
 
     def temp(self, specs: list[PackageSpec]) -> ProvisionedEnv:
-        """Create a temp virtualenv via ``uv`` and install ``specs``.
+        """Build a temp virtualenv with `uv` and install `specs` into it.
 
-        The temp directory's cleanup is registered with ``atexit`` as a
-        safety net before any further work runs, so a crash or exception
-        in venv creation cannot leak the directory.
+        atexit cleanup is registered immediately after the temp dir is
+        created so an exception during venv setup can't leak the directory.
         """
         if not self.check_uv_available():
             msg = (
@@ -115,11 +114,11 @@ class EnvironmentProvisioner:
         return ProvisionedEnv(site_packages=sp, _tmp_dir=tmp_dir)
 
     def check_uv_available(self) -> bool:
-        """Return True if ``uv`` is on PATH."""
+        """True if `uv` is on PATH."""
         return shutil.which("uv") is not None
 
     def is_venv_dir(self, path: Path) -> bool:
-        """Return True if ``path`` looks like a virtualenv (site-packages + no pyproject)."""
+        """True if `path` looks like a virtualenv: site-packages present, no pyproject."""
         if not path.is_dir():
             return False
         if (path / "pyproject.toml").exists():
@@ -146,8 +145,8 @@ class EnvironmentProvisioner:
         if result.returncode == 0:
             return
 
-        # Batch install failed -- fall back to installing one-by-one so that
-        # unpublished / dev-only versions don't block the entire run.
+        # Batch install failed. Fall back to per-package installs so one
+        # unpublished or dev-only version doesn't block the entire run.
         logger.debug("Batch install failed, falling back to individual installs")
         for spec in specs:
             arg = self._spec_to_install_arg(spec)
@@ -172,14 +171,14 @@ class EnvironmentProvisioner:
 
     @staticmethod
     def _spec_to_install_arg(spec: PackageSpec) -> str:
-        """Convert a ``PackageSpec`` to a ``uv pip install`` positional arg."""
+        """Format a PackageSpec as a positional arg for `uv pip install`."""
         if spec.source_url:
             return f"{spec.name} @ {spec.source_url}"
         return f"{spec.name}{spec.version_constraint}"
 
     @staticmethod
     def _find_python(venv_path: Path) -> Path:
-        """Return the Python binary inside a virtualenv."""
+        """Locate the Python binary inside a virtualenv."""
         python = venv_path / "bin" / "python"
         if python.exists():
             return python
@@ -191,7 +190,7 @@ class EnvironmentProvisioner:
 
     @staticmethod
     def _find_site_packages(venv_path: Path) -> Path | None:
-        """Return the site-packages dir inside a virtualenv, or ``None``."""
+        """Locate the site-packages dir inside a virtualenv, or None."""
         lib_dir = venv_path / "lib"
         if lib_dir.is_dir():
             for child in lib_dir.iterdir():

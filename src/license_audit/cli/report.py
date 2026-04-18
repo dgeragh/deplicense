@@ -1,4 +1,4 @@
-"""The `report` CLI command, generate compliance documents."""
+"""The `report` CLI command. Generates compliance documents."""
 
 from __future__ import annotations
 

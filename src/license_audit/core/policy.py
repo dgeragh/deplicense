@@ -1,4 +1,4 @@
-"""Policy evaluation and action-item generation."""
+"""Policy evaluation and action-item generation for audit results."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from license_audit.licenses.spdx import SpdxNormalizer
 
 
 class PolicyEngine:
-    """Build and evaluate license policies, generating human-readable action items."""
+    """Evaluates license policies and generates user-facing action items."""
 
     POLICY_MAX_RANK: dict[PolicyLevel, int] = {
         PolicyLevel.PERMISSIVE: CATEGORY_RANK[LicenseCategory.PERMISSIVE],
@@ -36,17 +36,21 @@ class PolicyEngine:
         self._normalizer = normalizer or SpdxNormalizer()
 
     def max_rank(self, level: PolicyLevel) -> int | None:
-        """Return the maximum category rank ``level`` permits."""
+        """Maximum category rank that `level` permits."""
         return self.POLICY_MAX_RANK.get(level)
 
     def exceeds_rank(self, pkg: PackageLicense, max_rank: int | None) -> bool:
-        """Return True if ``pkg`` exceeds ``max_rank``. UNKNOWN categories never exceed."""
+        """True if `pkg` is more restrictive than `max_rank` allows.
+
+        UNKNOWN is not treated as an exceedance, so callers can handle
+        unknown licenses separately via `fail_on_unknown`.
+        """
         if max_rank is None or pkg.category == LicenseCategory.UNKNOWN:
             return False
         return CATEGORY_RANK.get(pkg.category, 5) > max_rank
 
     def build_policy(self, config: LicenseAuditConfig) -> LicensePolicy:
-        """Promote a ``LicenseAuditConfig`` into a pre-validated ``LicensePolicy``."""
+        """Lift a LicenseAuditConfig into a LicensePolicy suitable for `check`."""
         return LicensePolicy(
             policy_type=config.policy,
             allowed_licenses=config.allowed_licenses,
@@ -59,7 +63,7 @@ class PolicyEngine:
         packages: list[PackageLicense],
         policy: LicensePolicy,
     ) -> bool:
-        """Return True if every package satisfies ``policy``."""
+        """True if every package satisfies `policy`."""
         max_rank = self.max_rank(policy.policy_type)
 
         denied_set = (
@@ -101,9 +105,7 @@ class PolicyEngine:
         incompatible: list[CompatibilityResult],
         config: LicenseAuditConfig,
     ) -> list[ActionItem]:
-        """Generate action items for unknown licenses, incompatible pairs,
-        denied licenses, and copyleft policy violations.
-        """
+        """Produce action items for unknown, incompatible, denied, and copyleft issues."""
         items: list[ActionItem] = []
 
         for pkg in packages:
@@ -168,7 +170,7 @@ class PolicyEngine:
         packages: list[PackageLicense],
         denied_licenses: list[str],
     ) -> list[ActionItem]:
-        """Build action items for packages using denied licenses."""
+        """Action items for packages whose license is on the denylist."""
         items: list[ActionItem] = []
         denied_set = {d.lower() for d in denied_licenses}
         for pkg in packages:
@@ -188,7 +190,7 @@ class PolicyEngine:
 
     @staticmethod
     def is_unknown(pkg: PackageLicense) -> bool:
-        """Return True if ``pkg`` has an unknown or unrecognized license."""
+        """True if the license is literally UNKNOWN or can't be categorized."""
         return (
             pkg.license_expression == UNKNOWN_LICENSE
             or pkg.category == LicenseCategory.UNKNOWN
@@ -196,7 +198,7 @@ class PolicyEngine:
 
     @staticmethod
     def unknown_message(pkg: PackageLicense) -> str:
-        """Human-readable message explaining why ``pkg``'s license is unknown."""
+        """User-facing explanation for why a package's license is unknown."""
         if pkg.license_expression == UNKNOWN_LICENSE:
             detail = f"License for '{pkg.name}' could not be detected."
         else:

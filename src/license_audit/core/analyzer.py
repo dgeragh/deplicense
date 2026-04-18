@@ -1,4 +1,4 @@
-"""Main analysis orchestrator."""
+"""Top-level license audit pipeline."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from license_audit.util import MetadataReader, canonicalize
 
 @dataclass
 class TargetInfo:
-    """Result of resolving a --target argument."""
+    """Resolved --target: which source file and/or venv to audit."""
 
     source_path: Path | None = None
     site_packages: Path | None = None
@@ -39,7 +39,7 @@ class TargetInfo:
 
 
 class TargetResolver:
-    """Classify a ``--target`` path as source file, venv, or project dir."""
+    """Classifies a --target path as source file, venv, or project dir."""
 
     def __init__(
         self,
@@ -50,10 +50,10 @@ class TargetResolver:
         self._provisioner = provisioner or EnvironmentProvisioner()
 
     def resolve(self, target: Path | None) -> TargetInfo:
-        """Resolve ``target`` into a ``TargetInfo``.
+        """Resolve `target` into a TargetInfo.
 
-        Raises ``FileNotFoundError`` if ``target`` points nowhere, or
-        ``ValueError`` if it's an unrecognized file.
+        Raises FileNotFoundError if `target` points nowhere, or ValueError
+        if it's a file we don't know how to parse.
         """
         if target is None:
             return TargetInfo(config_dir=Path.cwd())
@@ -90,11 +90,10 @@ class TargetResolver:
 
 
 class LicenseAuditor:
-    """Top-level orchestrator that produces an ``AnalysisReport``.
+    """Runs the full audit pipeline and returns an AnalysisReport.
 
-    Each collaborator is injected via the constructor so tests can swap any
-    part of the pipeline. Default-constructed instances work without setup:
-    ``LicenseAuditor().run(target=Path('.'))``.
+    Each collaborator is injectable so tests can swap pieces, but a plain
+    `LicenseAuditor().run(target=Path('.'))` works without any setup.
     """
 
     def __init__(
@@ -134,7 +133,7 @@ class LicenseAuditor:
         target: Path | None = None,
         config: LicenseAuditConfig | None = None,
     ) -> AnalysisReport:
-        """Run a full license analysis and return the report."""
+        """Run the audit pipeline against `target` and return the report."""
         info = self._resolver.resolve(target)
 
         if config is None:

@@ -24,7 +24,7 @@ _classifier = LicenseClassifier()
 
 
 class CategoryDescriptions:
-    """User-facing copy describing each license category."""
+    """Human-readable copy and guidance for each license category."""
 
     DESCRIPTIONS: dict[LicenseCategory, str] = {
         LicenseCategory.PERMISSIVE: (
@@ -121,7 +121,7 @@ def recommend_cmd(ctx: click.Context) -> None:
 def _find_most_restrictive(
     packages: list[PackageLicense],
 ) -> tuple[LicenseCategory, PackageLicense | None]:
-    """Find the most restrictive dependency by license category."""
+    """Return the package with the most restrictive license category."""
     most_cat = LicenseCategory.PERMISSIVE
     most_pkg: PackageLicense | None = None
     for pkg in packages:
@@ -136,7 +136,7 @@ def _render_constraint(
     category: LicenseCategory,
     pkg: PackageLicense | None,
 ) -> None:
-    """Render the most restrictive dependency constraint."""
+    """Print the most restrictive dependency and what it means."""
     if pkg and category != LicenseCategory.PERMISSIVE:
         console.print(
             f"[bold yellow]Most restrictive dependency:[/bold yellow] "
@@ -149,7 +149,7 @@ def _render_constraint(
 
 
 def _render_recommendations(console: Console, report: AnalysisReport) -> None:
-    """Render license recommendations and guidance."""
+    """Print the recommended licenses and guidance panel."""
     if not report.recommended_licenses:
         console.print(
             "[bold red]No compatible outbound license found![/bold red]\n"
@@ -181,7 +181,7 @@ def _render_recommendations(console: Console, report: AnalysisReport) -> None:
 
 
 def _render_action_items(console: Console, report: AnalysisReport) -> None:
-    """Render action items."""
+    """Print any action items from the report."""
     if not report.action_items:
         return
     console.print()

@@ -11,9 +11,10 @@ from license_audit.core.models import PolicyLevel
 
 
 def resolve_config(ctx: click.Context) -> tuple[Path | None, LicenseAuditConfig]:
-    """Resolve the target and config from the CLI context.
+    """Extract the target path and merged config from the CLI context.
 
-    Shared by all commands that run an analysis.
+    CLI flags (--policy, --dependency-groups) override values read from
+    pyproject.toml.
     """
     target: Path | None = ctx.obj.get("target")
     policy: str | None = ctx.obj.get("policy")
