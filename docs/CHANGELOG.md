@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 (2026-04-19)
+
+### Added
+
+- `[tool.license-audit.ignored-packages]` configuration for exempting specific packages from policy evaluation
+
 ## 0.2.0 (2026-04-17)
 
 ### Added
