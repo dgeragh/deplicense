@@ -125,7 +125,11 @@ The typical flow when introducing a new package:
      [tool.license-audit.overrides]
      new-package = "MIT"
      ```
-   - **Exit 1 (policy violation):** either swap the dependency for a differently-licensed alternative, add the license to `allowed-licenses`, or relax `policy` (for example `permissive` to `weak-copyleft`) if that fits your project.
+   - **Exit 1 (policy violation):** either swap the dependency for a differently-licensed alternative, add the license to `allowed-licenses`, relax `policy` (for example `permissive` to `weak-copyleft`), or, if you've manually reviewed the package and confirmed it's safe for your use case, exempt it via `[tool.license-audit.ignored-packages]`:
+     ```toml
+     [tool.license-audit.ignored-packages]
+     flagged-package = "Reviewed manually; OSADL flag doesn't apply to our use case"
+     ```
 
 ## Check flags
 

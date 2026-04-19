@@ -56,6 +56,7 @@ class PolicyEngine:
             allowed_licenses=config.allowed_licenses,
             denied_licenses=config.denied_licenses,
             fail_on_unknown=config.fail_on_unknown,
+            ignored_packages=config.ignored_packages,
         )
 
     def check(
@@ -63,41 +64,38 @@ class PolicyEngine:
         packages: list[PackageLicense],
         policy: LicensePolicy,
     ) -> bool:
-        """True if every package satisfies `policy`."""
+        """True if every non-ignored package satisfies `policy`."""
         max_rank = self.max_rank(policy.policy_type)
+        denied_set = {d.lower() for d in policy.denied_licenses}
+        allowed_set = {a.lower() for a in policy.allowed_licenses}
 
-        denied_set = (
-            {d.lower() for d in policy.denied_licenses}
-            if policy.denied_licenses
-            else set()
-        )
-        allowed_set = (
-            {a.lower() for a in policy.allowed_licenses}
-            if policy.allowed_licenses
-            else set()
+        return all(
+            self._package_satisfies(pkg, policy, max_rank, denied_set, allowed_set)
+            for pkg in packages
+            if not pkg.ignored
         )
 
-        for pkg in packages:
-            if policy.fail_on_unknown and self.is_unknown(pkg):
-                return False
+    def _package_satisfies(
+        self,
+        pkg: PackageLicense,
+        policy: LicensePolicy,
+        max_rank: int | None,
+        denied_set: set[str],
+        allowed_set: set[str],
+    ) -> bool:
+        if policy.fail_on_unknown and self.is_unknown(pkg):
+            return False
+        if self.exceeds_rank(pkg, max_rank):
+            return False
 
-            if self.exceeds_rank(pkg, max_rank):
-                return False
-
-            if denied_set:
-                for lic in self._normalizer.get_simple_licenses(pkg.license_expression):
-                    if lic.lower() in denied_set:
-                        return False
-
-            if allowed_set:
-                for lic in self._normalizer.get_simple_licenses(pkg.license_expression):
-                    if (
-                        lic.lower() not in allowed_set
-                        and pkg.license_expression != UNKNOWN_LICENSE
-                    ):
-                        return False
-
-        return True
+        simple = self._normalizer.get_simple_licenses(pkg.license_expression)
+        if denied_set and any(lic.lower() in denied_set for lic in simple):
+            return False
+        return not (
+            allowed_set
+            and pkg.license_expression != UNKNOWN_LICENSE
+            and any(lic.lower() not in allowed_set for lic in simple)
+        )
 
     def build_action_items(
         self,
@@ -105,8 +103,13 @@ class PolicyEngine:
         incompatible: list[CompatibilityResult],
         config: LicenseAuditConfig,
     ) -> list[ActionItem]:
-        """Produce action items for unknown, incompatible, denied, and copyleft issues."""
+        """Produce action items for unknown, incompatible, denied, and copyleft issues.
+
+        Packages with `ignored=True` are skipped; they've been intentionally
+        exempted from policy evaluation and should not produce action items.
+        """
         items: list[ActionItem] = []
+        packages = [p for p in packages if not p.ignored]
 
         for pkg in packages:
             if self.is_unknown(pkg):

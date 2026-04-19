@@ -73,6 +73,28 @@ my-internal-package = "MIT"
 dual-licensed-pkg = "Apache-2.0 OR MIT"
 ```
 
+### `ignored-packages`
+
+Exempt specific packages from policy evaluation. Each entry is a reason string that becomes part of the audit trail.
+
+```toml
+[tool.license-audit.ignored-packages]
+pandas-stubs = "Stubs only, not redistributed"
+internal-tool = "Vendored, excluded from dist"
+```
+
+Ignored packages:
+
+- **Are skipped** from the `check` command's policy evaluation (never trigger exit 1 or exit 2).
+- **Are excluded** from the incompatible-pair check, so their license does not constrain recommendations.
+- **Still appear** in every report (terminal, markdown, JSON, notices) with an `ignored` marker and the reason, preserving the audit trail.
+
+The reason is required and must be a non-empty string. This forces each exemption to be documented. Empty reasons are rejected at config-load time.
+
+Package names are canonicalized per PEP 503, so `pandas-stubs`, `pandas_stubs`, and `Pandas.Stubs` all match the same package.
+
+Use this when a dependency's license is flagged by the policy but, after manual review, you've confirmed it is safe for your use case. Prefer `overrides` when you want to re-assert the license itself; prefer `ignored-packages` when the license is what it says on the tin but doesn't matter for your situation.
+
 ## Target resolution
 
 The `--target` CLI flag controls what license-audit analyzes. The source type is inferred automatically:

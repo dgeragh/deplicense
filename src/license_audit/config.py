@@ -57,6 +57,7 @@ class LicenseAuditConfig(BaseModel):
     denied_licenses: list[str] = Field(default_factory=list)
     overrides: dict[str, str] = Field(default_factory=dict)
     dependency_groups: list[str] | None = None
+    ignored_packages: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("dependency_groups", mode="before")
     @classmethod
@@ -70,6 +71,29 @@ class LicenseAuditConfig(BaseModel):
             msg = "dependency_groups must be a list of strings"
             raise TypeError(msg)
         return GroupSpec.validate_list(value)
+
+    @field_validator("ignored_packages", mode="before")
+    @classmethod
+    def _validate_ignored_packages(
+        cls,
+        value: object,
+    ) -> dict[str, str]:
+        if not value:
+            return {}
+        if not isinstance(value, dict):
+            # Pydantic v2 wraps ValueError into ValidationError but passes
+            # TypeError through as-is, so we raise ValueError for consistent
+            # error surfacing even though TypeError would be more idiomatic.
+            msg = "ignored-packages must be a table mapping package name to reason"
+            raise ValueError(msg)  # noqa: TRY004
+        for key, reason in value.items():
+            if not isinstance(reason, str) or not reason.strip():
+                msg = (
+                    f"ignored-packages['{key}'] must be a non-empty string "
+                    f"explaining why the package is ignored"
+                )
+                raise ValueError(msg)
+        return value
 
 
 def load_config(config_dir: Path | None = None) -> LicenseAuditConfig:

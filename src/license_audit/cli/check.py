@@ -97,11 +97,16 @@ def check_cmd(ctx: click.Context, fail_on_unknown: bool | None) -> None:
 
     report = run_audit(target, config)
 
+    # Ignored packages are exempted from all policy evaluation, including
+    # the unknown-license check that drives exit code 2.
     unknown_pkgs = [
         p
         for p in report.packages
-        if p.license_expression == UNKNOWN_LICENSE
-        or p.category == LicenseCategory.UNKNOWN
+        if not p.ignored
+        and (
+            p.license_expression == UNKNOWN_LICENSE
+            or p.category == LicenseCategory.UNKNOWN
+        )
     ]
 
     exit_code = _determine_exit_code(report, unknown_pkgs, config)

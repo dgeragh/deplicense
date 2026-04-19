@@ -93,6 +93,9 @@ denied-licenses = ["GPL-3.0-only"]
 [tool.license-audit.overrides]
 some-internal-package = "MIT"
 dual-licensed-pkg = "Apache-2.0 OR MIT"
+
+[tool.license-audit.ignored-packages]
+pandas-stubs = "Stubs only, not redistributed"
 ```
 
 Full configuration reference: [user guide -> configuration](https://dgeragh.github.io/license-audit/user-guide/configuration/).
