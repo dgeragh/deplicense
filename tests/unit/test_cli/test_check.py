@@ -266,3 +266,40 @@ class TestCheckFailOnUnknownFlag:
         with patch("license_audit.cli.check.run_audit", return_value=report) as _m:
             result = CliRunner().invoke(cli, ["check", "--fail-on-unknown"])
         assert result.exit_code == 2
+
+
+class TestCheckIgnoredPackages:
+    """Ignored packages are exempted from policy evaluation entirely."""
+
+    def test_ignored_unknown_does_not_trigger_exit_2(self) -> None:
+        ignored_unknown = PackageLicense(
+            name="mystery-pkg",
+            version="0.1.0",
+            license_expression="UNKNOWN",
+            license_source=LicenseSource.UNKNOWN,
+            category=LicenseCategory.UNKNOWN,
+            ignored=True,
+            ignore_reason="reviewed manually",
+        )
+        report = _make_report(packages=[_MIT_PKG, ignored_unknown])
+        with patch("license_audit.cli.check.run_audit", return_value=report) as _m:
+            result = CliRunner().invoke(cli, ["check", "--fail-on-unknown"])
+        assert result.exit_code == 0
+
+    def test_ignored_violation_with_real_violation_still_fails(self) -> None:
+        ignored_gpl = PackageLicense(
+            name="gpl-ignored",
+            version="1.0.0",
+            license_expression="GPL-3.0-only",
+            license_source=LicenseSource.METADATA,
+            category=LicenseCategory.STRONG_COPYLEFT,
+            ignored=True,
+            ignore_reason="reviewed",
+        )
+        report = _make_report(
+            packages=[ignored_gpl, _LGPL_PKG],
+            policy_passed=False,
+        )
+        with patch("license_audit.cli.check.run_audit", return_value=report) as _m:
+            result = CliRunner().invoke(cli, ["check"])
+        assert result.exit_code == 1

@@ -72,6 +72,8 @@ class PackageLicense(BaseModel):
     category: LicenseCategory = LicenseCategory.UNKNOWN
     parent: str = ""
     license_text: str | None = None
+    ignored: bool = False
+    ignore_reason: str = ""
 
 
 class DependencyNode(BaseModel):
@@ -133,6 +135,7 @@ class LicensePolicy(BaseModel):
     allowed_licenses: list[str] = Field(default_factory=list)
     denied_licenses: list[str] = Field(default_factory=list)
     fail_on_unknown: bool = True
+    ignored_packages: dict[str, str] = Field(default_factory=dict)
 
 
 class AnalysisReport(BaseModel):

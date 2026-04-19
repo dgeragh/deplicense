@@ -155,9 +155,13 @@ class LicenseAuditor:
             packages = tree.flatten()
             self._classify_packages(packages)
             self._collect_license_text(packages, env)
+            self._apply_ignores(packages, config.ignored_packages)
 
             dep_packages = [p for p in packages if p.name != canonicalize(project_name)]
-            dep_licenses = [p.license_expression for p in dep_packages]
+            # Ignored packages don't constrain recommendations or produce
+            # conflicts; they've been exempted by config.
+            active_packages = [p for p in dep_packages if not p.ignored]
+            dep_licenses = [p.license_expression for p in active_packages]
             dep_spdx_ids = self._extract_spdx_ids(dep_licenses)
 
             recommended = self._recommender.recommend(dep_licenses)
@@ -264,6 +268,23 @@ class LicenseAuditor:
                 pkg.name,
                 env.site_packages,
             )
+
+    def _apply_ignores(
+        self,
+        packages: list[PackageLicense],
+        ignored_packages: dict[str, str],
+    ) -> None:
+        """Mark packages listed in config.ignored_packages as ignored."""
+        if not ignored_packages:
+            return
+        reasons = {
+            canonicalize(name): reason for name, reason in ignored_packages.items()
+        }
+        for pkg in packages:
+            reason = reasons.get(pkg.name)
+            if reason is not None:
+                pkg.ignored = True
+                pkg.ignore_reason = reason
 
     def _extract_spdx_ids(self, expressions: list[str]) -> list[str]:
         ids: set[str] = set()

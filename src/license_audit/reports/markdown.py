@@ -24,13 +24,14 @@ class MarkdownRenderer:
             self._header(report),
             self._summary(report),
             self._dependency_table(report),
+            self._ignored_packages(report),
             self._classification_breakdown(report),
             self._compatibility_analysis(report),
             self._recommendations(report),
             self._action_items(report),
             self._footer(),
         ]
-        return "\n".join(sections)
+        return "\n".join(s for s in sections if s)
 
     def _header(self, report: AnalysisReport) -> str:
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -58,16 +59,22 @@ class MarkdownRenderer:
         )
 
         status = "PASSED" if report.policy_passed else "FAILED"
+        ignored = sum(1 for p in report.packages if p.ignored)
+
+        rows = [
+            f"| Total dependencies | {total} |",
+            f"| Permissive licenses | {permissive} |",
+            f"| Copyleft licenses | {copyleft} |",
+            f"| Unknown licenses | {unknown} |",
+        ]
+        if ignored:
+            rows.append(f"| Ignored packages | {ignored} |")
+        rows.append(f"| Policy check | {status} |")
 
         return (
-            f"\n## Summary\n\n"
-            f"| Metric | Value |\n"
-            f"|--------|-------|\n"
-            f"| Total dependencies | {total} |\n"
-            f"| Permissive licenses | {permissive} |\n"
-            f"| Copyleft licenses | {copyleft} |\n"
-            f"| Unknown licenses | {unknown} |\n"
-            f"| Policy check | {status} |\n"
+            "\n## Summary\n\n"
+            "| Metric | Value |\n"
+            "|--------|-------|\n" + "\n".join(rows) + "\n"
         )
 
     def _dependency_table(self, report: AnalysisReport) -> str:
@@ -78,9 +85,30 @@ class MarkdownRenderer:
         ]
         for pkg in sorted(report.packages, key=lambda p: p.name):
             parent = pkg.parent if pkg.parent != pkg.name else "(direct)"
+            category = (
+                f"{pkg.category.value} (ignored)" if pkg.ignored else pkg.category.value
+            )
             lines.append(
                 f"| {pkg.name} | {pkg.version} | {pkg.license_expression} "
-                f"| {pkg.category.value} | {pkg.license_source.value} | {parent} |"
+                f"| {category} | {pkg.license_source.value} | {parent} |"
+            )
+        return "\n".join(lines) + "\n"
+
+    def _ignored_packages(self, report: AnalysisReport) -> str:
+        ignored = [p for p in report.packages if p.ignored]
+        if not ignored:
+            return ""
+        lines = [
+            "\n## Ignored Packages\n",
+            "These packages are exempted from policy evaluation via "
+            "`[tool.license-audit.ignored-packages]`.\n",
+            "| Package | Version | License | Reason |",
+            "|---------|---------|---------|--------|",
+        ]
+        for pkg in sorted(ignored, key=lambda p: p.name):
+            reason = pkg.ignore_reason or "(no reason given)"
+            lines.append(
+                f"| {pkg.name} | {pkg.version} | {pkg.license_expression} | {reason} |"
             )
         return "\n".join(lines) + "\n"
 

@@ -32,6 +32,7 @@ class TerminalRenderer:
         """Write `report` to the attached console."""
         self._render_header(report)
         self._render_package_table(report)
+        self._render_ignored(report)
         self._render_compatibility(report)
         self._render_recommendations(report)
         self._render_action_items(report)
@@ -53,8 +54,12 @@ class TerminalRenderer:
 
         for pkg in sorted(report.packages, key=lambda p: p.name):
             color = self.CATEGORY_COLORS.get(pkg.category, "white")
-            category_text = Text(pkg.category.value, style=color)
+            category_label = (
+                f"{pkg.category.value} (ignored)" if pkg.ignored else pkg.category.value
+            )
+            category_text = Text(category_label, style="dim" if pkg.ignored else color)
             parent = pkg.parent if pkg.parent != pkg.name else "(direct)"
+            row_style = "dim" if pkg.ignored else ""
             table.add_row(
                 pkg.name,
                 pkg.version,
@@ -62,9 +67,20 @@ class TerminalRenderer:
                 category_text,
                 pkg.license_source.value,
                 parent,
+                style=row_style,
             )
 
         self._console.print(table)
+        self._console.print()
+
+    def _render_ignored(self, report: AnalysisReport) -> None:
+        ignored = [p for p in report.packages if p.ignored]
+        if not ignored:
+            return
+        self._console.print("[bold]Ignored Packages:[/bold]")
+        for pkg in sorted(ignored, key=lambda p: p.name):
+            reason = pkg.ignore_reason or "(no reason given)"
+            self._console.print(f"  [dim]- {pkg.name}[/dim]: {reason}")
         self._console.print()
 
     def _render_compatibility(self, report: AnalysisReport) -> None:
@@ -129,11 +145,14 @@ class TerminalRenderer:
                 LicenseCategory.NETWORK_COPYLEFT,
             )
         )
+        ignored = sum(1 for p in report.packages if p.ignored)
 
         self._console.rule("[bold]Summary[/bold]")
         self._console.print(f"  Total dependencies: {total}")
         self._console.print(f"  Unknown licenses:   {unknown}")
         self._console.print(f"  Copyleft licenses:  {copyleft}")
+        if ignored:
+            self._console.print(f"  Ignored packages:   {ignored}")
 
         if report.policy_passed is not None:
             if report.policy_passed:
