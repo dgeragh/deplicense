@@ -1,4 +1,4 @@
-"""license_audit: Analyze dependency licenses and get actionable licensing guidance."""
+"""license_audit: Analyze dependency licenses with compatibility and outbound license recommendations."""
 
 try:
     from ._version import __version__  # type: ignore[import-not-found,unused-ignore]

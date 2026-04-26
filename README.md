@@ -1,17 +1,17 @@
 # license-audit
 
-**Analyze dependency licenses and get actionable licensing guidance for Python projects.**
+**Analyze dependency licenses for Python projects.**
 
-license-audit goes beyond listing dependency licenses. It tells you what license your project can use, flags incompatible combinations, and generates compliance documents suitable for CI gating.
+license-audit tells you what license your project can use, flags incompatible combinations, and generates compliance documents suitable for CI gating.
 
 ## Features
 
-- **License detection** from PEP 639 metadata, trove classifiers, and user overrides across the full transitive dependency tree.
-- **Compatibility analysis** using the [OSADL compatibility matrix](https://www.osadl.org/Access-to-raw-data.oss-compliance-raw-data-access.0.html) (covers ~120 well-known licenses).
-- **Outbound license recommendations** ranked by permissiveness.
-- **Compliance reports** in Markdown, JSON, or third-party-notices form.
-- **CI-ready** with distinct exit codes for policy violations and undetected licenses.
-- **First-class support** for uv, `pyproject.toml`, and PEP 639.
+- License detection from PEP 639 metadata, trove classifiers, and user overrides across the full transitive tree.
+- Pairwise compatibility checking against the [OSADL compatibility matrix](https://www.osadl.org/Access-to-raw-data.oss-compliance-raw-data-access.0.html) (~120 licenses).
+- Outbound license recommendations ranked by permissiveness.
+- Compliance reports as Markdown, JSON, or third-party-notices.
+- CI exit codes that distinguish policy violations from undetected licenses.
+- Reads `uv.lock`, `poetry.lock`, `pixi.lock`, `pyproject.toml`, `requirements.txt`, and live virtualenvs.
 
 ## Installation
 
@@ -34,16 +34,13 @@ license-audit --target . analyze
 ```
 
 ```
-──────────────────── License Analysis: my-project ────────────────────
+License Analysis: my-project
 
-                        Dependency Licenses
-┏━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┓
-┃ Package  ┃ Version ┃ License      ┃ Category   ┃ Source ┃ Parent   ┃
-┡━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━┩
-│ click    │ 8.1.7   │ BSD-3-Clause │ permissive │ pep639 │ (direct) │
-│ pydantic │ 2.9.2   │ MIT          │ permissive │ pep639 │ (direct) │
-│ rich     │ 13.9.4  │ MIT          │ permissive │ pep639 │ (direct) │
-└──────────┴─────────┴──────────────┴────────────┴────────┴──────────┘
+Dependency Licenses
+  Package   Version  License        Category    Source  Parent
+  click     8.1.7    BSD-3-Clause   permissive  pep639  (direct)
+  pydantic  2.9.2    MIT            permissive  pep639  (direct)
+  rich      13.9.4   MIT            permissive  pep639  (direct)
 
 Recommended Outbound Licenses (most -> least permissive):
   -> MIT
@@ -51,7 +48,7 @@ Recommended Outbound Licenses (most -> least permissive):
      Apache-2.0
      ...
 
-──────────────────────────── Summary ────────────────────────────
+Summary
   Total dependencies: 3
   Policy check:       PASSED
 ```
@@ -79,7 +76,7 @@ Exit codes:
 | `1` | Policy violation (incompatible pairs or denied licenses) |
 | `2` | Unknown licenses detected (when `fail-on-unknown = true`) |
 
-For GitLab CI, pre-commit hooks, handling unknowns, and the "adding a new dependency" workflow, see the [CI integration guide](https://dgeragh.github.io/license-audit/user-guide/ci-integration/).
+For GitLab, pre-commit, handling unknowns, and the new-dependency workflow, see the [CI integration guide](https://dgeragh.github.io/license-audit/latest/user-guide/ci-integration/).
 
 ## Configuration
 
@@ -98,20 +95,20 @@ dual-licensed-pkg = "Apache-2.0 OR MIT"
 pandas-stubs = "Stubs only, not redistributed"
 ```
 
-Full configuration reference: [user guide -> configuration](https://dgeragh.github.io/license-audit/user-guide/configuration/).
+Full reference: [user guide -> configuration](https://dgeragh.github.io/license-audit/latest/user-guide/configuration/).
 
 ## Documentation
 
 Full documentation lives at **https://dgeragh.github.io/license-audit**:
 
-- [Configuration reference](https://dgeragh.github.io/license-audit/user-guide/configuration/) - all options, target resolution, dependency group selectors.
-- [CI integration guide](https://dgeragh.github.io/license-audit/user-guide/ci-integration/) - GitHub Actions, GitLab, pre-commit, new-dependency workflow.
-- [How it works](https://dgeragh.github.io/license-audit/reference/how-it-works/) - the detection and analysis pipeline.
-- [Comparison with other tools](https://dgeragh.github.io/license-audit/reference/comparison/) - ScanCode, pip-licenses, liccheck.
-- [Limitations](https://dgeragh.github.io/license-audit/reference/limitations/) - what the tool does and doesn't cover.
+- [Configuration reference](https://dgeragh.github.io/license-audit/latest/user-guide/configuration/)
+- [CI integration guide](https://dgeragh.github.io/license-audit/latest/user-guide/ci-integration/)
+- [How it works](https://dgeragh.github.io/license-audit/latest/reference/how-it-works/)
+- [Comparison with other tools](https://dgeragh.github.io/license-audit/latest/reference/comparison/)
+- [Limitations](https://dgeragh.github.io/license-audit/latest/reference/limitations/)
 
 ## License
 
-MIT - see [LICENSE](https://github.com/dgeragh/license-audit/blob/main/LICENSE).
+MIT. See [LICENSE](https://github.com/dgeragh/license-audit/blob/main/LICENSE).
 
 This project bundles data from the [OSADL Open Source License Obligations Checklists](https://www.osadl.org/Checklists) project, licensed under CC-BY-4.0. See [THIRD_PARTY_NOTICES.md](https://github.com/dgeragh/license-audit/blob/main/THIRD_PARTY_NOTICES.md) for full attribution.

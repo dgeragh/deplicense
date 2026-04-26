@@ -1,7 +1,7 @@
 [project]
 name = "license-audit"
 dynamic = ["version"]
-description = "Analyze dependency licenses and get actionable licensing guidance for Python projects"
+description = "Analyze dependency licenses for Python projects, with compatibility checks and outbound license recommendations"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -28,6 +28,7 @@ dependencies = [
     "license-expression>=30.0.0",
     "packaging>=23.0",
     "platformdirs>=3.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.urls]
@@ -68,6 +69,7 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.2.0",
     "mypy>=1.8.0",
+    "types-pyyaml>=6.0",
 ]
 
 [tool.pytest.ini_options]
@@ -117,7 +119,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S105", "S106"]
+"tests/*" = ["S101", "S105", "S106", "S603"]
 "src/license_audit/environment/provision.py" = ["S603", "S607"]
 
 [[tool.mypy.overrides]]

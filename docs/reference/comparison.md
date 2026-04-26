@@ -16,4 +16,4 @@
 | `pyproject.toml` configuration | Yes | No | No | Yes |
 | uv / PEP 639 support | Yes | No | No | No |
 
-**In short:** license-audit is for Python teams that want actionable compliance guidance - not just "what licenses do I have?" but "what can I ship, and do my dependencies conflict?" If you need file-level scanning across a polyglot codebase, ScanCode is the right tool for that job and complements license-audit well.
+license-audit flags dependency conflicts and provides licensing recommendations. If you need file-level scanning across a multi-language codebase, use ScanCode.

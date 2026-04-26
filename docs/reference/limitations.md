@@ -1,19 +1,37 @@
 # Limitations
 
-- **Package-level detection only.** license-audit reads the license declared in package metadata (PEP 639, `License` field, trove classifiers). It does not scan `THIRD_PARTY_NOTICES`, `NOTICE`, or `LICENSE` files inside dependencies and cannot detect bundled or vendored code whose license differs from the package's declared one. For file-level scanning, see [ScanCode](https://github.com/nexB/scancode-toolkit).
+## Detection is package-level
 
-- **OSADL matrix coverage.** The OSADL compatibility matrix covers roughly 120 well-known open-source licenses. Niche, custom, or proprietary licenses produce "Unknown" compatibility verdicts. Use `[tool.license-audit.overrides]` to manually assign SPDX identifiers when detection fails.
+license-audit reads what's declared in package metadata: PEP 639 fields, the legacy `License` field, trove classifiers. It does not scan `LICENSE` or `NOTICE` files inside dependencies, and it can't detect bundled or vendored code whose license differs from the package's declaration. For file-level scanning, use [ScanCode](https://github.com/nexB/scancode-toolkit).
 
-- **OSADL is strict.** The matrix encodes a conservative reading of license compatibility. For weak-copyleft licenses (LGPL, MPL) it typically excludes permissive outbound licenses even though dynamic linking or unmodified redistribution can make those combinations acceptable in practice. Treat the matrix as the default guardrail and consult legal review for edge cases.
+## OSADL coverage is finite
 
-- **License string normalization.** PyPI packages use wildly inconsistent license strings. license-audit maps 60+ common aliases to SPDX identifiers, but uncommon or malformed strings may not be recognized and will be reported as UNKNOWN. Overrides can fill these gaps.
+The OSADL compatibility matrix covers about 120 well-known open-source licenses. Niche, custom, or proprietary licenses produce "Unknown" verdicts. Use `[tool.license-audit.overrides]` to assign SPDX identifiers manually when detection fails.
 
-- **`requirements.txt` is flat.** When analyzing a `requirements.txt`, only direct dependencies listed in the file are parsed. Transitive dependencies are resolved by installing into a temporary environment, but the initial spec list comes from the file as written.
+## OSADL is conservative
 
-- **`uv.lock` format stability.** `uv.lock` has no formal specification. The parser supports version 1 of the lock format and fails explicitly on unrecognized versions.
+The matrix encodes a strict reading of license compatibility. For weak-copyleft licenses (LGPL, MPL) it typically excludes permissive outbound combinations even though dynamic linking or unmodified redistribution often makes those acceptable in practice. Treat the matrix as a default guardrail, not a final answer.
 
-- **Environment markers.** Dependency markers (platform, Python version, extras) are evaluated against the current runtime environment. Dependencies conditional on a different platform or Python version will not be included.
+## License strings on PyPI are messy
 
-- **uv required for temp environments.** When analyzing a dependency file or project directory (rather than a venv or the current environment), license-audit creates a temporary environment using uv. If uv is not installed, these targets will fail. Direct venv and current-environment analysis do not require uv.
+PyPI packages use inconsistent license strings. license-audit normalizes 60+ common aliases to SPDX identifiers, but uncommon or malformed strings will be reported as UNKNOWN. Overrides fill the gap.
 
-- **No legal advice.** license-audit provides informational analysis based on OSADL compatibility data. It is not a substitute for legal review. License compatibility can depend on distribution method, linking type, and jurisdiction - factors this tool does not evaluate.
+## Source-format quirks
+
+- `requirements.txt` is flat: only direct dependencies in the file are parsed. Transitive packages get pulled in when the temp environment is provisioned, but the parser itself only sees what's written down.
+- `uv.lock` has no formal spec. The parser supports lock-format version 1 and fails explicitly on anything else.
+- `poetry.lock` doesn't preserve the project-level extras-to-package mapping, so the `optional:<extra>` selector is rejected. Use `pyproject.toml` if you need extras filtering.
+- `pixi.lock` can mix PyPI and conda entries. Only PyPI entries are audited; conda entries are skipped with a warning showing the count.
+- `pixi.lock` is also filtered to the host platform (plus `noarch`), matching how environment markers are evaluated for `uv.lock`.
+
+## Environment markers track the host
+
+Dependency markers (platform, Python version, extras) are evaluated against the current runtime. Dependencies that are conditional on a different platform or Python version aren't included.
+
+## uv is required for temp environments
+
+Analyzing a dependency file or project directory creates a temp environment via uv. If uv isn't installed, those targets fail. Direct venv and current-environment analysis don't need uv.
+
+## Not legal advice
+
+The output is informational, based on OSADL data. Real license compatibility depends on how you distribute, how you link, and what jurisdiction you're in. Treat anything this tool generates as a starting point for legal review, not the final answer.

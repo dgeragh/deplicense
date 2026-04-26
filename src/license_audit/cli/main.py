@@ -45,7 +45,7 @@ def cli(
     policy: str | None,
     dependency_groups: tuple[str, ...],
 ) -> None:
-    """license-audit - Analyze dependency licenses and get actionable guidance."""
+    """license-audit: Analyze dependency licenses for Python projects."""
     ctx.ensure_object(dict)
     ctx.obj["target"] = target
     ctx.obj["policy"] = policy

@@ -60,7 +60,7 @@ def _print_result(
             f"with undetected licenses: {', '.join(names)}"
         )
 
-    # Warnings are printed regardless of pass/fail since they're actionable.
+    # Warnings print regardless of pass/fail.
     warnings = [i for i in report.action_items if i.severity == "warning"]
     if warnings:
         console.print()
