@@ -1,6 +1,6 @@
 # CI integration
 
-`license-audit check` is designed for CI pipelines. It returns distinct exit codes so a pipeline can differentiate real violations from packages whose license couldn't be detected.
+`license-audit check` is built for CI pipelines. It returns three distinct exit codes so a pipeline can tell real violations apart from packages whose license couldn't be detected.
 
 ## Exit codes
 
@@ -12,7 +12,7 @@
 
 ## GitHub Actions
 
-Minimal setup:
+Minimal:
 
 ```yaml
 jobs:
@@ -25,7 +25,7 @@ jobs:
       - run: uv run license-audit check
 ```
 
-Surface the compliance report as a PR job summary (runs even when `check` fails):
+Show the compliance report as a PR job summary, even when `check` fails:
 
 ```yaml
       - name: Compliance summary
@@ -33,7 +33,7 @@ Surface the compliance report as a PR job summary (runs even when `check` fails)
         run: uv run license-audit report --format markdown >> $GITHUB_STEP_SUMMARY
 ```
 
-Upload the compliance report and notices file as build artifacts:
+Upload the compliance report and notices as build artifacts:
 
 ```yaml
       - name: Generate reports
@@ -82,7 +82,7 @@ Catch violations locally before they reach CI. Add to `.pre-commit-config.yaml`:
       stages: [pre-push]
 ```
 
-Running on `pre-push` (not `pre-commit`) keeps commits fast and only checks once before pushing.
+`pre-push` (rather than `pre-commit`) keeps commits fast and only runs the check once before pushing.
 
 ## Branching on exit codes
 
@@ -98,9 +98,9 @@ case $ec in
 esac
 ```
 
-## Running different policies in separate jobs
+## Different policies in separate jobs
 
-Use the `--policy` flag to set the level without touching `pyproject.toml`:
+`--policy` sets the level without touching `pyproject.toml`:
 
 ```yaml
 - name: Strict permissive check
@@ -112,20 +112,20 @@ Use the `--policy` flag to set the level without touching `pyproject.toml`:
 
 Available levels: `permissive`, `weak-copyleft`, `strong-copyleft`, `network-copyleft`.
 
-## Adding a new dependency: workflow
+## Adding a new dependency
 
-The typical flow when introducing a new package:
+Typical flow when introducing a new package:
 
 1. `uv add <package>` (or edit `pyproject.toml` and `uv sync`).
 2. Run `uv run license-audit check` locally.
 3. Handle the outcome:
-   - **Exit 0:** commit and push.
-   - **Exit 2 (unknown):** the tool couldn't detect an SPDX identifier. Add an override in `pyproject.toml` once you've confirmed the license:
+   - **Exit 0**: commit and push.
+   - **Exit 2 (unknown)**: the tool couldn't pin down an SPDX identifier. Once you've confirmed the license, add an override:
      ```toml
      [tool.license-audit.overrides]
      new-package = "MIT"
      ```
-   - **Exit 1 (policy violation):** either swap the dependency for a differently-licensed alternative, add the license to `allowed-licenses`, relax `policy` (for example `permissive` to `weak-copyleft`), or, if you've manually reviewed the package and confirmed it's safe for your use case, exempt it via `[tool.license-audit.ignored-packages]`:
+   - **Exit 1 (policy violation)**: swap the dependency for a differently-licensed alternative, add the license to `allowed-licenses`, relax `policy` (e.g. `permissive` to `weak-copyleft`), or, if you've reviewed the package manually and confirmed it's safe for your case, exempt it:
      ```toml
      [tool.license-audit.ignored-packages]
      flagged-package = "Reviewed manually; OSADL flag doesn't apply to our use case"
@@ -135,8 +135,8 @@ The typical flow when introducing a new package:
 
 ```bash
 uv run license-audit check                        # default: fail on unknowns
-uv run license-audit check --no-fail-on-unknown   # tolerate unknowns (exit 0 if only unknowns, exit 1 if policy violations)
+uv run license-audit check --no-fail-on-unknown   # tolerate unknowns (exit 0 if only unknowns; exit 1 if policy violations)
 uv run license-audit check --fail-on-unknown      # explicit opt-in
 ```
 
-The flag takes precedence over `fail-on-unknown` in `pyproject.toml`.
+The flag overrides `fail-on-unknown` in `pyproject.toml`.

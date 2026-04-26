@@ -1,6 +1,6 @@
 site_name: license-audit
 site_url: https://dgeragh.github.io/license-audit/
-site_description: Analyze dependency licenses and get actionable licensing guidance for Python projects
+site_description: Analyze dependency licenses for Python projects, with compatibility checks and outbound license recommendations
 repo_url: https://github.com/dgeragh/license-audit
 repo_name: dgeragh/license-audit
 

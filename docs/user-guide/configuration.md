@@ -2,13 +2,13 @@
 
 license-audit is configured via `[tool.license-audit]` in your `pyproject.toml`.
 
-When using `--target`, configuration is always loaded from the target project's `pyproject.toml`. For example, `--target /path/to/uv.lock` reads config from `/path/to/pyproject.toml`. If no config is found, defaults apply.
+When using `--target`, configuration is loaded from the target project's `pyproject.toml`. So `--target /path/to/uv.lock` reads its config from `/path/to/pyproject.toml`. If no config is found, defaults apply.
 
 ## Options
 
 ### `fail-on-unknown`
 
-Whether to fail the `check` command when any dependency has an undetectable license. Default: `true`.
+Whether the `check` command fails when a dependency has an undetectable license. Default: `true`.
 
 ### `policy`
 
@@ -21,9 +21,9 @@ License policy preset. Default: `"permissive"`.
 | `"strong-copyleft"` | Allow permissive + weak + strong copyleft (GPL, etc.) |
 | `"network-copyleft"` | Allow all open-source licenses including AGPL |
 
-The policy defines the maximum copyleft level allowed. Any dependency with a license category above the policy threshold will fail the check.
+Each preset sets the maximum copyleft level allowed; anything above the threshold fails the check.
 
-This can also be set via the `--policy` CLI flag, which takes precedence over the config file:
+The `--policy` CLI flag overrides this setting:
 
 ```bash
 license-audit --policy weak-copyleft check
@@ -35,37 +35,37 @@ Explicit list of allowed SPDX identifiers. When set, only these licenses pass th
 
 ### `denied-licenses`
 
-List of SPDX identifiers that always fail the policy check, regardless of other settings.
+SPDX identifiers that always fail the policy check, regardless of other settings.
 
 ### `dependency-groups`
 
-Restrict analysis to specific dependency groups. When unset, all groups are included.
+Restricts analysis to specific groups. When unset, all groups are included.
 
 Each entry is a group selector:
 
 | Selector | Maps to |
 |---|---|
 | `main` | `[project.dependencies]` |
+| `dev` | `[tool.uv.dev-dependencies]` |
 | `optional:<name>` | `[project.optional-dependencies.<name>]` |
 | `group:<name>` | `[dependency-groups.<name>]` (PEP 735) |
-| `dev` | `[tool.uv.dev-dependencies]` |
 
 ```toml
 [tool.license-audit]
 dependency-groups = ["main", "optional:api"]
 ```
 
-This can also be set via the `--dependency-groups` CLI flag (repeatable), which takes precedence over the config file:
+The `--dependency-groups` CLI flag (repeatable) overrides this setting:
 
 ```bash
 license-audit --dependency-groups main --dependency-groups optional:api check
 ```
 
-For `requirements.txt` targets, this option is ignored (flat format with no group concept).
+Source-specific notes:
 
-For `poetry.lock` targets, the `optional:<extra>` selector is rejected because the lock file does not preserve the project-level extras-to-package mapping. Use `pyproject.toml` instead when extras filtering is required.
-
-For `pixi.lock` targets, environments map to selectors as `default`->`main`, `dev`->`dev`, and any other named environment via `group:<env_name>`. The `optional:<name>` selector has no analog in pixi and is rejected.
+- `requirements.txt` ignores this option (flat format with no group concept).
+- `poetry.lock` rejects `optional:<extra>` because the lock file doesn't preserve which extras own which packages. Use `pyproject.toml` if you need extras filtering.
+- `pixi.lock` maps environments to selectors: `default` -> `main`, `dev` -> `dev`, anything else via `group:<env_name>`. `optional:<name>` is rejected because pixi doesn't have an extras concept.
 
 ### `overrides`
 
@@ -79,7 +79,7 @@ dual-licensed-pkg = "Apache-2.0 OR MIT"
 
 ### `ignored-packages`
 
-Exempt specific packages from policy evaluation. Each entry is a reason string that becomes part of the audit trail.
+Exempt specific packages from policy evaluation. Each entry is a reason string that ends up in the audit trail.
 
 ```toml
 [tool.license-audit.ignored-packages]
@@ -87,21 +87,15 @@ pandas-stubs = "Stubs only, not redistributed"
 internal-tool = "Vendored, excluded from dist"
 ```
 
-Ignored packages:
+Ignored packages are skipped by `check`'s policy evaluation (no exit 1 or 2), excluded from incompatible-pair analysis (so they don't constrain recommendations), and still listed in every report (terminal, markdown, JSON, notices) with an `ignored` marker plus the reason.
 
-- **Are skipped** from the `check` command's policy evaluation (never trigger exit 1 or exit 2).
-- **Are excluded** from the incompatible-pair check, so their license does not constrain recommendations.
-- **Still appear** in every report (terminal, markdown, JSON, notices) with an `ignored` marker and the reason, preserving the audit trail.
+The reason is required and must be non-empty; empty reasons are rejected at config load. Package names are canonicalized per PEP 503, so `pandas-stubs`, `pandas_stubs`, and `Pandas.Stubs` all match.
 
-The reason is required and must be a non-empty string. This forces each exemption to be documented. Empty reasons are rejected at config-load time.
-
-Package names are canonicalized per PEP 503, so `pandas-stubs`, `pandas_stubs`, and `Pandas.Stubs` all match the same package.
-
-Use this when a dependency's license is flagged by the policy but, after manual review, you've confirmed it is safe for your use case. Prefer `overrides` when you want to re-assert the license itself; prefer `ignored-packages` when the license is what it says on the tin but doesn't matter for your situation.
+Use `overrides` when you want to re-assert what the license is. Use `ignored-packages` when the license is correct but doesn't apply to your situation (e.g. the package isn't shipped, or you've reviewed it manually and accepted the risk).
 
 ## Target resolution
 
-The `--target` CLI flag controls what license-audit analyzes. The source type is inferred automatically:
+The `--target` flag controls what license-audit analyzes. The source type is inferred from the target:
 
 | Target | Behavior |
 |--------|----------|
@@ -120,6 +114,6 @@ Examples:
 license-audit analyze                                # current environment (default)
 license-audit --target . analyze                     # auto-detect from current dir
 license-audit --target /path/to/project analyze      # auto-detect from project dir
-license-audit --target /path/to/uv.lock analyze      # parse a specific lockfile
+license-audit --target /path/to/uv.lock analyze      # parse a specific lock file
 license-audit --target /path/to/.venv analyze        # analyze an existing venv
 ```

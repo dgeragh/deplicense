@@ -1,7 +1,7 @@
 [project]
 name = "license-audit"
 dynamic = ["version"]
-description = "Analyze dependency licenses and get actionable licensing guidance for Python projects"
+description = "Analyze dependency licenses for Python projects, with compatibility checks and outbound license recommendations"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
