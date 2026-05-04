@@ -25,7 +25,7 @@ class RequirementsSource:
             msg = f"requirements.txt not found at {self._path}"
             raise FileNotFoundError(msg)
 
-        lines = self._path.read_text().splitlines()
+        lines = self._path.read_text(encoding="utf-8").splitlines()
         specs: list[PackageSpec] = []
 
         for line in lines:
