@@ -31,11 +31,11 @@ license-audit --policy weak-copyleft check
 
 ### `allowed-licenses`
 
-Explicit list of allowed SPDX identifiers. When set, only these licenses pass the policy check.
+Explicit list of allowed SPDX identifiers. When set, only these licenses pass the policy check, narrowing whatever `policy` would otherwise allow.
 
 ### `denied-licenses`
 
-SPDX identifiers that always fail the policy check, regardless of other settings.
+SPDX identifiers that always fail the policy check, regardless of `policy` or `allowed-licenses`.
 
 ### `dependency-groups`
 

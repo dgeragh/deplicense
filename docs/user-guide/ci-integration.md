@@ -82,7 +82,7 @@ Catch violations locally before they reach CI. Add to `.pre-commit-config.yaml`:
       stages: [pre-push]
 ```
 
-`pre-push` (rather than `pre-commit`) keeps commits fast and only runs the check once before pushing.
+Running on the `pre-push` stage (instead of every commit) keeps commits fast and only runs the check once before pushing.
 
 ## Branching on exit codes
 
