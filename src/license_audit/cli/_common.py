@@ -14,8 +14,8 @@ from license_audit.core.models import AnalysisReport, PolicyLevel
 def resolve_config(ctx: click.Context) -> tuple[Path | None, LicenseAuditConfig]:
     """Extract the target path and merged config from the CLI context.
 
-    CLI flags (--policy, --dependency-groups) override values read from
-    pyproject.toml.
+    CLI flags (--target, --policy, --dependency-groups) override values
+    read from pyproject.toml.
     """
     target: Path | None = ctx.obj.get("target")
     policy: str | None = ctx.obj.get("policy")
@@ -26,6 +26,11 @@ def resolve_config(ctx: click.Context) -> tuple[Path | None, LicenseAuditConfig]
         config.policy = PolicyLevel(policy)
     if dependency_groups:
         config.dependency_groups = list(dependency_groups)
+    if target is None and config.target is not None:
+        # Resolve relative paths against the pyproject dir so config is
+        # portable across CI/dev machines regardless of CWD.
+        base = config_dir if config_dir is not None else Path.cwd()
+        target = (base / config.target).resolve()
     return target, config
 
 

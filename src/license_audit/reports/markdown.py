@@ -35,8 +35,10 @@ class MarkdownRenderer:
 
     def _header(self, report: AnalysisReport) -> str:
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+        source_line = f"Source: {report.source}\n" if report.source else ""
         return (
-            f"# License Compliance Report: {report.project_name}\n\nGenerated: {now}\n"
+            f"# License Compliance Report: {report.project_name}\n\n"
+            f"Generated: {now}\n{source_line}"
         )
 
     def _summary(self, report: AnalysisReport) -> str:

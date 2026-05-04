@@ -106,6 +106,8 @@ def recommend_cmd(ctx: click.Context) -> None:
 
     console.print()
     console.rule(f"[bold]License Recommendation: {report.project_name}[/bold]")
+    if report.source:
+        console.print(f"[dim]Source:[/dim] {report.source}")
     console.print()
 
     if not report.packages:

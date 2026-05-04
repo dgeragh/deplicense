@@ -178,12 +178,21 @@ class LicenseAuditor:
 
         return AnalysisReport(
             project_name=project_name,
+            source=self._describe_source(info),
             packages=dep_packages,
             incompatible_pairs=incompatible,
             recommended_licenses=recommended,
             action_items=action_items,
             policy_passed=policy_passed,
         )
+
+    @staticmethod
+    def _describe_source(info: TargetInfo) -> str:
+        if info.source_path is not None:
+            return str(info.source_path)
+        if info.site_packages is not None:
+            return str(info.site_packages)
+        return "active environment"
 
     def _warn_if_groups_ignored(
         self,
@@ -196,9 +205,9 @@ class LicenseAuditor:
             and info.site_packages is None
         ):
             warnings.warn(
-                "--dependency-groups has no effect without --target. "
-                "Specify a project directory or dependency file to enable "
-                "group filtering.",
+                "dependency-groups is configured but no target was resolved. "
+                'Pass --target . on the CLI, or add `target = "."` to '
+                "[tool.license-audit] in your pyproject.toml.",
                 UserWarning,
                 stacklevel=3,
             )

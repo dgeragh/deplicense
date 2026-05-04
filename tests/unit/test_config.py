@@ -56,6 +56,16 @@ class TestLoadConfig:
         config = load_config(tmp_path)
         assert config.dependency_groups == ["main", "optional:api"]
 
+    def test_target_from_pyproject(self, tmp_path: Path) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[tool.license-audit]\ntarget = "."\n')
+        config = load_config(tmp_path)
+        assert config.target == "."
+
+    def test_target_default_is_none(self, tmp_path: Path) -> None:
+        config = load_config(tmp_path)
+        assert config.target is None
+
 
 class TestDependencyGroupsValidation:
     def test_none_is_valid(self) -> None:

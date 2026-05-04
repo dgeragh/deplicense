@@ -81,3 +81,11 @@ class TestTerminalRenderer:
             AnalysisReport(project_name="fail", policy_passed=False),
         )
         assert "FAILED" in buf.getvalue()
+
+    def test_source_in_header(self) -> None:
+        console, buf = _make_console()
+        TerminalRenderer(console=console).render(
+            AnalysisReport(project_name="p", source="/abs/uv.lock"),
+        )
+        assert "Source:" in buf.getvalue()
+        assert "/abs/uv.lock" in buf.getvalue()

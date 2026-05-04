@@ -109,6 +109,8 @@ def check_cmd(ctx: click.Context, fail_on_unknown: bool | None) -> None:
         )
     ]
 
+    if report.source:
+        console.print(f"[dim]Source:[/dim] {report.source}")
     exit_code = _determine_exit_code(report, unknown_pkgs, config)
     _print_result(console, report, unknown_pkgs, exit_code)
     sys.exit(exit_code)

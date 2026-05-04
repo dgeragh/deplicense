@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from license_audit.core.analyzer import LicenseAuditor
+from license_audit.config import LicenseAuditConfig
+from license_audit.core.analyzer import LicenseAuditor, TargetInfo
 from license_audit.core.models import (
     UNKNOWN_LICENSE,
     LicenseCategory,
@@ -22,6 +23,9 @@ class TestRun:
         assert report.project_name == "license-audit"
         assert len(report.packages) > 0
         assert report.policy_passed is not None
+        # source should point at the resolved dependency file inside the project.
+        assert report.source
+        assert "license-audit" in report.source or str(project_dir) in report.source
 
     def test_unknown_project(self, tmp_path: Path) -> None:
         """Empty directory with no source files raises FileNotFoundError."""
@@ -31,6 +35,46 @@ class TestRun:
     def test_no_target_uses_current_env(self) -> None:
         report = LicenseAuditor().run()
         assert report.project_name is not None
+        assert report.source == "active environment"
+
+
+class TestDescribeSource:
+    def test_source_path_wins(self, tmp_path: Path) -> None:
+        info = TargetInfo(source_path=tmp_path / "uv.lock", config_dir=tmp_path)
+        assert LicenseAuditor._describe_source(info) == str(tmp_path / "uv.lock")
+
+    def test_site_packages_when_no_source(self, tmp_path: Path) -> None:
+        info = TargetInfo(site_packages=tmp_path / ".venv", config_dir=tmp_path)
+        assert LicenseAuditor._describe_source(info) == str(tmp_path / ".venv")
+
+    def test_active_environment_fallback(self) -> None:
+        assert LicenseAuditor._describe_source(TargetInfo()) == "active environment"
+
+
+class TestWarnIfGroupsIgnored:
+    def test_warns_when_groups_set_and_no_target(self) -> None:
+        config = LicenseAuditConfig(dependency_groups=["main"])
+        info = TargetInfo()
+        with pytest.warns(UserWarning, match="dependency-groups is configured"):
+            LicenseAuditor()._warn_if_groups_ignored(info, config)
+
+    def test_no_warning_when_source_resolved(self, tmp_path: Path) -> None:
+        config = LicenseAuditConfig(dependency_groups=["main"])
+        info = TargetInfo(source_path=tmp_path / "uv.lock", config_dir=tmp_path)
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            LicenseAuditor()._warn_if_groups_ignored(info, config)
+
+    def test_no_warning_when_groups_unset(self) -> None:
+        config = LicenseAuditConfig()
+        info = TargetInfo()
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            LicenseAuditor()._warn_if_groups_ignored(info, config)
 
 
 class TestClassifyPackage:
