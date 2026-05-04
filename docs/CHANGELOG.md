@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 (2026-05-04)
+
+### Added
+
+- `target` field in `[tool.license-audit]` to set a default `--target`
+- Target source reporting for CLI command outputs
+
+### Fixed
+
+- Encoding errors when running on systems with a non-UTF-8 default locale
+
 ## 0.4.0 (2026-04-26)
 
 ### Added
