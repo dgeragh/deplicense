@@ -128,3 +128,14 @@ class TestRecommendPolicyFlag:
         config = mock.call_args.args[1]
         assert config is not None
         assert config.policy == "network-copyleft"
+
+
+class TestRecommendSource:
+    def test_source_displayed(self) -> None:
+        report = _make_report(packages=[_MIT_PKG], recommended_licenses=["MIT"])
+        report.source = "/abs/uv.lock"
+        with patch("license_audit.cli.recommend.run_audit", return_value=report) as _m:
+            result = CliRunner().invoke(cli, ["recommend"])
+        assert result.exit_code == 0
+        assert "Source:" in result.output
+        assert "/abs/uv.lock" in result.output

@@ -58,6 +58,7 @@ class LicenseAuditConfig(BaseModel):
     overrides: dict[str, str] = Field(default_factory=dict)
     dependency_groups: list[str] | None = None
     ignored_packages: dict[str, str] = Field(default_factory=dict)
+    target: str | None = None
 
     @field_validator("dependency_groups", mode="before")
     @classmethod

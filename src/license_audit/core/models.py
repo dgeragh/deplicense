@@ -142,6 +142,7 @@ class AnalysisReport(BaseModel):
     """Complete analysis output."""
 
     project_name: str = ""
+    source: str = ""
     packages: list[PackageLicense] = Field(default_factory=list)
     compatibility_results: list[CompatibilityResult] = Field(default_factory=list)
     incompatible_pairs: list[CompatibilityResult] = Field(default_factory=list)

@@ -85,6 +85,8 @@ class EnvironmentProvisioner:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             if specs:
@@ -141,6 +143,8 @@ class EnvironmentProvisioner:
             [*base_cmd, *install_args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode == 0:
             return
@@ -150,12 +154,20 @@ class EnvironmentProvisioner:
         logger.debug("Batch install failed, falling back to individual installs")
         for spec in specs:
             arg = self._spec_to_install_arg(spec)
-            per_pkg = subprocess.run([*base_cmd, arg], capture_output=True, text=True)
+            per_pkg = subprocess.run(
+                [*base_cmd, arg],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             if per_pkg.returncode != 0:
                 fallback = subprocess.run(
                     [*base_cmd, spec.name],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 if fallback.returncode != 0:
                     logger.warning(

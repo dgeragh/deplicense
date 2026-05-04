@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from license_audit.cli._common import resolve_config
 from license_audit.core.models import PolicyLevel
 
@@ -78,3 +80,50 @@ class TestResolveConfig:
             _ctx(target=tmp_path, dependency_groups=()),  # type: ignore[arg-type]
         )
         assert config.dependency_groups == ["main"]
+
+    def test_config_target_used_when_cli_target_absent(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`target` in `[tool.license-audit]` is used when --target is omitted."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            '[tool.license-audit]\ntarget = "."\n',
+        )
+        # CWD is the project so load_config(None) finds this pyproject.
+        monkeypatch.chdir(project)
+        target, config = resolve_config(_ctx())  # type: ignore[arg-type]
+        assert config.target == "."
+        assert target == project.resolve()
+
+    def test_config_target_resolved_against_pyproject_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Relative `target` resolves against the pyproject's directory."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        sibling = tmp_path / "sibling"
+        sibling.mkdir()
+        (project / "pyproject.toml").write_text(
+            '[tool.license-audit]\ntarget = "../sibling"\n',
+        )
+        # CWD is the project; CLI target absent so config.target kicks in.
+        monkeypatch.chdir(project)
+        target, _config = resolve_config(_ctx())  # type: ignore[arg-type]
+        assert target == sibling.resolve()
+
+    def test_cli_target_overrides_config_target(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "proj"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            '[tool.license-audit]\ntarget = "/should/be/ignored"\n',
+        )
+        target, _config = resolve_config(_ctx(target=project))  # type: ignore[arg-type]
+        assert target == project

@@ -91,3 +91,12 @@ class TestMarkdownRenderer:
         renderer = MarkdownRenderer()
         result = renderer.render(report)
         assert "...and 5 more" in result
+
+    def test_source_in_header(self) -> None:
+        report = AnalysisReport(project_name="p", source="/abs/path/uv.lock")
+        result = MarkdownRenderer().render(report)
+        assert "Source: /abs/path/uv.lock" in result
+
+    def test_no_source_line_when_empty(self) -> None:
+        result = MarkdownRenderer().render(AnalysisReport(project_name="p"))
+        assert "Source:" not in result

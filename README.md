@@ -6,7 +6,7 @@ license-audit tells you what license your project can use, flags incompatible co
 
 ## Features
 
-- License detection from PEP 639 metadata, trove classifiers, and user overrides across the full transitive tree.
+- License detection across the full transitive tree, from PEP 639 metadata, the legacy `License` field, trove classifiers, and user overrides.
 - Pairwise compatibility checking against the [OSADL compatibility matrix](https://www.osadl.org/Access-to-raw-data.oss-compliance-raw-data-access.0.html) (~120 licenses).
 - Outbound license recommendations ranked by permissiveness.
 - Compliance reports as Markdown, JSON, or third-party-notices.

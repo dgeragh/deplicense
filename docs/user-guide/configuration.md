@@ -31,11 +31,11 @@ license-audit --policy weak-copyleft check
 
 ### `allowed-licenses`
 
-Explicit list of allowed SPDX identifiers. When set, only these licenses pass the policy check.
+Explicit list of allowed SPDX identifiers. When set, only these licenses pass the policy check, narrowing whatever `policy` would otherwise allow.
 
 ### `denied-licenses`
 
-SPDX identifiers that always fail the policy check, regardless of other settings.
+SPDX identifiers that always fail the policy check, regardless of `policy` or `allowed-licenses`.
 
 ### `dependency-groups`
 
@@ -67,6 +67,23 @@ Source-specific notes:
 - `poetry.lock` rejects `optional:<extra>` because the lock file doesn't preserve which extras own which packages. Use `pyproject.toml` if you need extras filtering.
 - `pixi.lock` maps environments to selectors: `default` -> `main`, `dev` -> `dev`, anything else via `group:<env_name>`. `optional:<name>` is rejected because pixi doesn't have an extras concept.
 
+### `target`
+
+Default `--target` to use when none is supplied on the CLI. Relative paths resolve against the directory containing `pyproject.toml`.
+
+```toml
+[tool.license-audit]
+target = "."
+```
+
+The CLI `--target` flag overrides this setting:
+
+```bash
+license-audit --target /path/to/other check
+```
+
+When `target` is unset and `--target` is omitted, license-audit falls back to analyzing the active Python environment (see "Target resolution" below).
+
 ### `overrides`
 
 Manual license assignments for packages where auto-detection fails.
@@ -95,7 +112,7 @@ Use `overrides` when you want to re-assert what the license is. Use `ignored-pac
 
 ## Target resolution
 
-The `--target` flag controls what license-audit analyzes. The source type is inferred from the target:
+The `--target` flag (or `target` field in `[tool.license-audit]`) controls what license-audit analyzes. The source type is inferred from the target:
 
 | Target | Behavior |
 |--------|----------|
