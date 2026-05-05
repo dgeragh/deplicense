@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 (2026-05-05)
+
+### Fixed
+
+- AND expression evaluation now requires compliance with every component
+
 ## 0.5.0 (2026-05-04)
 
 ### Added
