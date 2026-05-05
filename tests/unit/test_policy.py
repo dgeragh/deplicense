@@ -248,6 +248,54 @@ class TestCheck:
             is True
         )
 
+    def test_or_expression_with_one_branch_denied_passes(self) -> None:
+        pkg = PackageLicense(
+            name="dual",
+            version="1.0",
+            license_expression="Apache-2.0 OR MIT",
+            category=LicenseCategory.PERMISSIVE,
+        )
+        assert PolicyEngine().check([pkg], _policy(denied=["MIT"])) is True
+
+    def test_or_expression_with_all_branches_denied_fails(self) -> None:
+        pkg = PackageLicense(
+            name="dual",
+            version="1.0",
+            license_expression="Apache-2.0 OR MIT",
+            category=LicenseCategory.PERMISSIVE,
+        )
+        assert (
+            PolicyEngine().check(
+                [pkg],
+                _policy(denied=["MIT", "Apache-2.0"]),
+            )
+            is False
+        )
+
+    def test_and_expression_with_one_branch_denied_fails(self) -> None:
+        pkg = PackageLicense(
+            name="weak",
+            version="1.0",
+            license_expression="MPL-2.0 AND MIT",
+            category=LicenseCategory.WEAK_COPYLEFT,
+        )
+        assert (
+            PolicyEngine().check(
+                [pkg],
+                _policy(PolicyLevel.WEAK_COPYLEFT, denied=["MPL-2.0"]),
+            )
+            is False
+        )
+
+    def test_or_expression_passes_when_one_branch_allowed(self) -> None:
+        pkg = PackageLicense(
+            name="dual",
+            version="1.0",
+            license_expression="Apache-2.0 OR MIT",
+            category=LicenseCategory.PERMISSIVE,
+        )
+        assert PolicyEngine().check([pkg], _policy(allowed=["MIT"])) is True
+
 
 class TestBuildActionItems:
     def test_denied_licenses_produce_errors(self) -> None:
@@ -257,6 +305,38 @@ class TestBuildActionItems:
             i for i in items if i.severity == "error" and "denied" in i.message
         ]
         assert len(denied_items) == 1
+
+    def test_or_expression_no_error_when_alt_avoids_denied(self) -> None:
+        pkg = PackageLicense(
+            name="dual",
+            version="1.0",
+            license_expression="Apache-2.0 OR MIT",
+            category=LicenseCategory.PERMISSIVE,
+        )
+        config = LicenseAuditConfig(denied_licenses=["MIT"])
+        items = PolicyEngine().build_action_items([pkg], [], config)
+        denied_errors = [
+            i for i in items if i.severity == "error" and "denied" in i.message
+        ]
+        assert denied_errors == []
+
+    def test_and_expression_produces_error_when_required_license_denied(self) -> None:
+        pkg = PackageLicense(
+            name="weak",
+            version="1.0",
+            license_expression="MPL-2.0 AND MIT",
+            category=LicenseCategory.WEAK_COPYLEFT,
+        )
+        config = LicenseAuditConfig(
+            policy=PolicyLevel.WEAK_COPYLEFT,
+            denied_licenses=["MPL-2.0"],
+        )
+        items = PolicyEngine().build_action_items([pkg], [], config)
+        denied_errors = [
+            i for i in items if i.severity == "error" and "denied" in i.message
+        ]
+        assert len(denied_errors) == 1
+        assert "MPL-2.0" in denied_errors[0].message
 
     def test_unknown_produces_warning(self) -> None:
         items = PolicyEngine().build_action_items([_UNKNOWN], [], LicenseAuditConfig())

@@ -94,6 +94,26 @@ class TestClassifyPackage:
         auditor._classify_package(pkg)
         assert pkg.category == LicenseCategory.PERMISSIVE
 
+    def test_and_expression_picks_most_restrictive(self) -> None:
+        pkg = PackageLicense(
+            name="tqdm",
+            version="4.67",
+            license_expression="MPL-2.0 AND MIT",
+        )
+        auditor = LicenseAuditor()
+        auditor._classify_package(pkg)
+        assert pkg.category == LicenseCategory.WEAK_COPYLEFT
+
+    def test_nested_and_over_or(self) -> None:
+        pkg = PackageLicense(
+            name="orjson",
+            version="3.11",
+            license_expression="MPL-2.0 AND (Apache-2.0 OR MIT)",
+        )
+        auditor = LicenseAuditor()
+        auditor._classify_package(pkg)
+        assert pkg.category == LicenseCategory.WEAK_COPYLEFT
+
 
 class TestExtractSpdxIds:
     def test_skips_unknown(self) -> None:
@@ -105,3 +125,13 @@ class TestExtractSpdxIds:
 
     def test_empty_list(self) -> None:
         assert LicenseAuditor()._extract_spdx_ids([]) == []
+
+    def test_or_expression_only_contributes_chosen_branch(self) -> None:
+        result = LicenseAuditor()._extract_spdx_ids(["GPL-3.0-only OR MIT"])
+        assert "MIT" in result
+        assert "GPL-3.0-only" not in result
+
+    def test_and_expression_contributes_all_components(self) -> None:
+        result = LicenseAuditor()._extract_spdx_ids(["MPL-2.0 AND MIT"])
+        assert "MPL-2.0" in result
+        assert "MIT" in result
