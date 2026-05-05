@@ -14,6 +14,7 @@ from license_audit.core.models import (
     PackageLicense,
     PolicyLevel,
 )
+from license_audit.licenses.expression import ExpressionEvaluator
 from license_audit.licenses.spdx import SpdxNormalizer
 
 
@@ -31,9 +32,14 @@ class PolicyEngine:
         self,
         classifier: LicenseClassifier | None = None,
         normalizer: SpdxNormalizer | None = None,
+        expression: ExpressionEvaluator | None = None,
     ) -> None:
         self._classifier = classifier or LicenseClassifier()
         self._normalizer = normalizer or SpdxNormalizer()
+        self._expression = expression or ExpressionEvaluator(
+            classifier=self._classifier,
+            normalizer=self._normalizer,
+        )
 
     def max_rank(self, level: PolicyLevel) -> int | None:
         """Maximum category rank that `level` permits."""
@@ -87,14 +93,14 @@ class PolicyEngine:
             return False
         if self.exceeds_rank(pkg, max_rank):
             return False
-
-        simple = self._normalizer.get_simple_licenses(pkg.license_expression)
-        if denied_set and any(lic.lower() in denied_set for lic in simple):
-            return False
-        return not (
-            allowed_set
-            and pkg.license_expression != UNKNOWN_LICENSE
-            and any(lic.lower() not in allowed_set for lic in simple)
+        if pkg.license_expression == UNKNOWN_LICENSE:
+            return True
+        if not denied_set and not allowed_set:
+            return True
+        return self._expression.passes_denied_allowed(
+            pkg.license_expression,
+            denied_set,
+            allowed_set,
         )
 
     def build_action_items(
@@ -173,22 +179,38 @@ class PolicyEngine:
         packages: list[PackageLicense],
         denied_licenses: list[str],
     ) -> list[ActionItem]:
-        """Action items for packages whose license is on the denylist."""
+        """Action items for packages whose license is on the denylist.
+
+        Skips packages where at least one OR-alternative avoids the
+        denied set, since the project can pick that branch instead.
+        """
         items: list[ActionItem] = []
         denied_set = {d.lower() for d in denied_licenses}
         for pkg in packages:
-            for lic in self._normalizer.get_simple_licenses(pkg.license_expression):
-                if lic.lower() in denied_set:
-                    items.append(
-                        ActionItem(
-                            severity="error",
-                            package=pkg.name,
-                            message=(
-                                f"Package '{pkg.name}' uses denied license '{lic}'. "
-                                f"Find an alternative or request an exemption."
-                            ),
-                        ),
-                    )
+            if pkg.license_expression == UNKNOWN_LICENSE:
+                continue
+            if self._expression.passes_denied_allowed(
+                pkg.license_expression,
+                denied_set,
+                set(),
+            ):
+                continue
+            required = self._expression.required_ids(pkg.license_expression)
+            denied_used = next(
+                (lic for lic in required if lic.lower() in denied_set),
+                pkg.license_expression,
+            )
+            items.append(
+                ActionItem(
+                    severity="error",
+                    package=pkg.name,
+                    message=(
+                        f"Package '{pkg.name}' uses denied license "
+                        f"'{denied_used}'. Find an alternative or request "
+                        f"an exemption."
+                    ),
+                ),
+            )
         return items
 
     @staticmethod

@@ -10,7 +10,6 @@ from license_audit.config import LicenseAuditConfig, get_project_name, load_conf
 from license_audit.core.classifier import LicenseClassifier
 from license_audit.core.compatibility import CompatibilityMatrix
 from license_audit.core.models import (
-    CATEGORY_RANK,
     UNKNOWN_LICENSE,
     AnalysisReport,
     DependencyNode,
@@ -23,6 +22,7 @@ from license_audit.environment.analyze import (
     analyze_installed_packages,
 )
 from license_audit.environment.provision import EnvironmentProvisioner, ProvisionedEnv
+from license_audit.licenses.expression import ExpressionEvaluator
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.factory import SourceFactory
@@ -107,10 +107,15 @@ class LicenseAuditor:
         recommender: LicenseRecommender | None = None,
         policy: PolicyEngine | None = None,
         metadata_reader: MetadataReader | None = None,
+        expression: ExpressionEvaluator | None = None,
     ) -> None:
         self._matrix = matrix or CompatibilityMatrix()
         self._classifier = classifier or LicenseClassifier()
         self._normalizer = normalizer or SpdxNormalizer(matrix=self._matrix)
+        self._expression = expression or ExpressionEvaluator(
+            classifier=self._classifier,
+            normalizer=self._normalizer,
+        )
         self._recommender = recommender or LicenseRecommender(
             matrix=self._matrix,
             classifier=self._classifier,
@@ -119,6 +124,7 @@ class LicenseAuditor:
         self._policy = policy or PolicyEngine(
             classifier=self._classifier,
             normalizer=self._normalizer,
+            expression=self._expression,
         )
         self._sources = source_factory or SourceFactory()
         self._provisioner = provisioner or EnvironmentProvisioner()
@@ -257,15 +263,7 @@ class LicenseAuditor:
                 self._classify_package(pkg)
 
     def _classify_package(self, pkg: PackageLicense) -> None:
-        simple = self._normalizer.get_simple_licenses(pkg.license_expression)
-        if len(simple) == 1:
-            pkg.category = self._classifier.classify(simple[0])
-        elif len(simple) > 1:
-            categories = [self._classifier.classify(s) for s in simple]
-            pkg.category = min(
-                categories,
-                key=lambda c: CATEGORY_RANK.get(c, 5),
-            )
+        pkg.category = self._expression.classify(pkg.license_expression)
 
     def _collect_license_text(
         self,
@@ -299,6 +297,6 @@ class LicenseAuditor:
         ids: set[str] = set()
         for expr in expressions:
             if expr != UNKNOWN_LICENSE:
-                for lic in self._normalizer.get_simple_licenses(expr):
+                for lic in self._expression.required_ids(expr):
                     ids.add(lic)
         return list(ids)
