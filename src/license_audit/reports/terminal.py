@@ -10,6 +10,7 @@ from license_audit.core.models import AnalysisReport, LicenseCategory
 from license_audit.reports._format import (
     ActionItemFormatter,
     IncompatiblePairFormatter,
+    SummaryStats,
 )
 
 
@@ -133,28 +134,14 @@ class TerminalRenderer:
         self._console.print()
 
     def _render_summary(self, report: AnalysisReport) -> None:
-        total = len(report.packages)
-        unknown = sum(
-            1 for p in report.packages if p.category == LicenseCategory.UNKNOWN
-        )
-        copyleft = sum(
-            1
-            for p in report.packages
-            if p.category
-            in (
-                LicenseCategory.STRONG_COPYLEFT,
-                LicenseCategory.WEAK_COPYLEFT,
-                LicenseCategory.NETWORK_COPYLEFT,
-            )
-        )
-        ignored = sum(1 for p in report.packages if p.ignored)
+        stats = SummaryStats.from_report(report)
 
         self._console.rule("[bold]Summary[/bold]")
-        self._console.print(f"  Total dependencies: {total}")
-        self._console.print(f"  Unknown licenses:   {unknown}")
-        self._console.print(f"  Copyleft licenses:  {copyleft}")
-        if ignored:
-            self._console.print(f"  Ignored packages:   {ignored}")
+        self._console.print(f"  Total dependencies: {stats.total}")
+        self._console.print(f"  Unknown licenses:   {stats.unknown}")
+        self._console.print(f"  Copyleft licenses:  {stats.copyleft}")
+        if stats.ignored:
+            self._console.print(f"  Ignored packages:   {stats.ignored}")
 
         if report.policy_passed is not None:
             if report.policy_passed:
