@@ -10,7 +10,7 @@ subprocess so they catch what in-process ``CliRunner`` tests can't:
 - ``warnings.warn`` from inside the analyzer reaches the user's stderr.
 
 Each test provisions a synthetic project under ``tmp_path``. The provisioning
-step (``uv pip install`` of small real packages) makes these noticeably slower
+step (``pip wheel`` of small real packages) makes these noticeably slower
 than the unit suite, hence their separate location under ``tests/integration``.
 """
 

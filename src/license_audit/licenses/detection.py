@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-import importlib.metadata as importlib_metadata
-from pathlib import Path
-from typing import Any
+from email.message import Message
 
 from license_audit.core.models import UNKNOWN_LICENSE, LicenseSource
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.util import MetadataReader
 
 _normalizer = SpdxNormalizer()
-_metadata_reader = MetadataReader()
 
 
 def detect_license(
     package_name: str,
+    reader: MetadataReader,
     overrides: dict[str, str] | None = None,
 ) -> tuple[str, LicenseSource]:
-    """Detect the license for a package from the current environment.
+    """Detect a package's license.
 
     Detection order:
     1. User overrides
@@ -30,55 +28,24 @@ def detect_license(
     if overrides and package_name in overrides:
         return overrides[package_name], LicenseSource.OVERRIDE
 
-    try:
-        meta = importlib_metadata.metadata(package_name)
-    except importlib_metadata.PackageNotFoundError:
-        return UNKNOWN_LICENSE, LicenseSource.UNKNOWN
-
-    return _detect_from_metadata(meta)
-
-
-def detect_license_from_path(
-    package_name: str,
-    site_packages: Path,
-    overrides: dict[str, str] | None = None,
-) -> tuple[str, LicenseSource]:
-    """Detect the license for a package by reading from a site-packages directory.
-
-    Useful when analyzing a project whose dependencies are installed in a
-    different .venv than the one running license_audit.
-    """
-    if overrides and package_name in overrides:
-        return overrides[package_name], LicenseSource.OVERRIDE
-
-    meta = _metadata_reader.read_metadata(package_name, site_packages)
+    meta = reader.read_metadata(package_name)
     if meta is None:
         return UNKNOWN_LICENSE, LicenseSource.UNKNOWN
 
     return _detect_from_metadata(meta)
 
 
-def _detect_from_metadata(meta: Any) -> tuple[str, LicenseSource]:
+def _detect_from_metadata(meta: Message) -> tuple[str, LicenseSource]:
     """Extract license from package metadata fields."""
-    # PEP 639 License-Expression
-    result = _try_pep639(meta)
-    if result:
-        return result
-
-    # License metadata field
-    result = _try_license_field(meta)
-    if result:
-        return result
-
-    # Trove classifiers
-    result = _try_classifiers(meta)
-    if result:
-        return result
-
-    return "UNKNOWN", LicenseSource.UNKNOWN
+    return (
+        _try_pep639(meta)
+        or _try_license_field(meta)
+        or _try_classifiers(meta)
+        or (UNKNOWN_LICENSE, LicenseSource.UNKNOWN)
+    )
 
 
-def _try_pep639(meta: Any) -> tuple[str, LicenseSource] | None:
+def _try_pep639(meta: Message) -> tuple[str, LicenseSource] | None:
     license_expr = meta.get("License-Expression")
     if license_expr and license_expr.strip().upper() != UNKNOWN_LICENSE:
         normalized = _normalizer.normalize(license_expr)
@@ -87,7 +54,7 @@ def _try_pep639(meta: Any) -> tuple[str, LicenseSource] | None:
     return None
 
 
-def _try_license_field(meta: Any) -> tuple[str, LicenseSource] | None:
+def _try_license_field(meta: Message) -> tuple[str, LicenseSource] | None:
     license_field = meta.get("License")
     if license_field and license_field.strip().upper() not in ("UNKNOWN", "", "NONE"):
         normalized = _normalizer.normalize(license_field)
@@ -96,7 +63,7 @@ def _try_license_field(meta: Any) -> tuple[str, LicenseSource] | None:
     return None
 
 
-def _try_classifiers(meta: Any) -> tuple[str, LicenseSource] | None:
+def _try_classifiers(meta: Message) -> tuple[str, LicenseSource] | None:
     classifiers = meta.get_all("Classifier") or []
     license_classifiers = [c for c in classifiers if c.startswith("License ::")]
     spdx_from_classifiers: list[str] = []

@@ -26,7 +26,7 @@ from license_audit.licenses.expression import ExpressionEvaluator
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.factory import SourceFactory
-from license_audit.util import MetadataReader, canonicalize
+from license_audit.util import canonicalize
 
 
 @dataclass
@@ -106,7 +106,6 @@ class LicenseAuditor:
         normalizer: SpdxNormalizer | None = None,
         recommender: LicenseRecommender | None = None,
         policy: PolicyEngine | None = None,
-        metadata_reader: MetadataReader | None = None,
         expression: ExpressionEvaluator | None = None,
     ) -> None:
         self._matrix = matrix or CompatibilityMatrix()
@@ -132,7 +131,6 @@ class LicenseAuditor:
             source_factory=self._sources,
             provisioner=self._provisioner,
         )
-        self._metadata_reader = metadata_reader or MetadataReader()
 
     def run(
         self,
@@ -250,12 +248,12 @@ class LicenseAuditor:
             pkg_extras = {s.name: s.extras for s in specs if s.extras}
             return analyze_installed_packages(
                 project_name,
-                env.site_packages,
+                env.reader,
                 [s.name for s in specs],
                 overrides,
                 pkg_extras,
             )
-        return analyze_environment(project_name, env.site_packages, overrides)
+        return analyze_environment(project_name, env.reader, overrides)
 
     def _classify_packages(self, packages: list[PackageLicense]) -> None:
         for pkg in packages:
@@ -271,10 +269,7 @@ class LicenseAuditor:
         env: ProvisionedEnv,
     ) -> None:
         for pkg in packages:
-            pkg.license_text = self._metadata_reader.read_license_text(
-                pkg.name,
-                env.site_packages,
-            )
+            pkg.license_text = env.reader.read_license_text(pkg.name)
 
     def _apply_ignores(
         self,

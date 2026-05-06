@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import atexit
 import logging
-import shutil
 import subprocess
+import sys
 import sysconfig
 import tempfile
 from dataclasses import dataclass, field
@@ -13,18 +13,19 @@ from pathlib import Path
 from typing import Self
 
 from license_audit.sources.base import PackageSpec
+from license_audit.util import MetadataReader
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ProvisionedEnv:
-    """A Python environment ready for analysis.
+    """A reader bound to whichever environment we provisioned.
 
-    Used as a context manager so temp environments are always cleaned up.
+    Use as a context manager so temp directories get cleaned up.
     """
 
-    site_packages: Path
+    reader: MetadataReader
     _tmp_dir: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
 
     def cleanup(self) -> None:
@@ -44,12 +45,10 @@ class ProvisionedEnv:
 class EnvironmentProvisioner:
     """Creates or attaches to the Python environment we analyze."""
 
-    INSTALL_TIMEOUT_SECONDS: int = 30
-
     def current(self) -> ProvisionedEnv:
         """Use the interpreter running license_audit itself."""
         site_packages = Path(sysconfig.get_path("purelib"))
-        return ProvisionedEnv(site_packages=site_packages)
+        return ProvisionedEnv(reader=MetadataReader.from_site_packages(site_packages))
 
     def from_venv(self, venv_path: Path) -> ProvisionedEnv:
         """Attach to an existing virtualenv at `venv_path`.
@@ -60,40 +59,22 @@ class EnvironmentProvisioner:
         if sp is None:
             msg = f"No site-packages directory found in {venv_path}"
             raise FileNotFoundError(msg)
-        return ProvisionedEnv(site_packages=sp)
+        return ProvisionedEnv(reader=MetadataReader.from_site_packages(sp))
 
     def temp(self, specs: list[PackageSpec]) -> ProvisionedEnv:
-        """Build a temp virtualenv with `uv` and install `specs` into it.
+        """Resolve `specs` into a temp directory of ``.whl`` files via ``pip wheel``.
 
-        atexit cleanup is registered immediately after the temp dir is
-        created so an exception during venv setup can't leak the directory.
+        Wheels are downloaded where available and built from sdist
+        otherwise (PEP 517). atexit cleanup is registered before pip
+        runs so a crash mid-provision doesn't leak the temp dir.
         """
-        if not self.check_uv_available():
-            msg = (
-                "license_audit requires 'uv' to analyze external projects. "
-                "Install it with: pip install uv"
-            )
-            raise RuntimeError(msg)
-
         tmp_dir = tempfile.TemporaryDirectory(prefix="license_audit_")
         atexit.register(tmp_dir.cleanup)
 
         try:
-            venv_path = Path(tmp_dir.name) / ".venv"
-            subprocess.run(
-                ["uv", "venv", str(venv_path)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            if specs:
-                python_path = self._find_python(venv_path)
-                self._install_specs(specs, python_path)
-
-            sp = self._find_site_packages(venv_path)
+            wheel_dir = Path(tmp_dir.name) / "wheels"
+            wheel_dir.mkdir()
+            self._download_wheels(specs, wheel_dir)
         except subprocess.CalledProcessError as e:
             atexit.unregister(tmp_dir.cleanup)
             tmp_dir.cleanup()
@@ -107,17 +88,10 @@ class EnvironmentProvisioner:
             tmp_dir.cleanup()
             raise
 
-        if sp is None:
-            atexit.unregister(tmp_dir.cleanup)
-            tmp_dir.cleanup()
-            msg = f"No site-packages found in provisioned environment at {venv_path}"
-            raise RuntimeError(msg)
-
-        return ProvisionedEnv(site_packages=sp, _tmp_dir=tmp_dir)
-
-    def check_uv_available(self) -> bool:
-        """True if `uv` is on PATH."""
-        return shutil.which("uv") is not None
+        return ProvisionedEnv(
+            reader=MetadataReader.from_wheel_dir(wheel_dir),
+            _tmp_dir=tmp_dir,
+        )
 
     def is_venv_dir(self, path: Path) -> bool:
         """True if `path` looks like a virtualenv: site-packages present, no pyproject."""
@@ -127,78 +101,63 @@ class EnvironmentProvisioner:
             return False
         return self._find_site_packages(path) is not None
 
-    def _install_specs(self, specs: list[PackageSpec], python_path: Path) -> None:
-        base_cmd = [
-            "uv",
-            "pip",
-            "install",
-            "--prerelease",
-            "allow",
-            "--python",
-            str(python_path),
-        ]
+    def _download_wheels(
+        self,
+        specs: list[PackageSpec],
+        wheel_dir: Path,
+    ) -> None:
+        if not specs:
+            return
+
+        base_cmd = [sys.executable, "-m", "pip", "wheel", "--pre", "-w", str(wheel_dir)]
         install_args = [self._spec_to_install_arg(s) for s in specs]
 
-        result = subprocess.run(
-            [*base_cmd, *install_args],
+        result = self._run_pip(base_cmd, install_args)
+        if result.returncode == 0:
+            return
+
+        # Retry one spec at a time so a single yanked or unpublished
+        # version doesn't kill the rest.
+        logger.debug("Batch wheel build failed, falling back to individual builds")
+        for spec in specs:
+            arg = self._spec_to_install_arg(spec)
+            per_pkg = self._run_pip(base_cmd, [arg])
+            if per_pkg.returncode == 0:
+                continue
+            fallback = self._run_pip(base_cmd, [spec.name])
+            if fallback.returncode != 0:
+                logger.warning(
+                    "Could not build wheel for '%s', skipping "
+                    "(license info will be unavailable)",
+                    arg,
+                )
+            else:
+                logger.warning(
+                    "Exact version %s not available; "
+                    "built latest release instead (license may differ)",
+                    arg,
+                )
+
+    @staticmethod
+    def _run_pip(
+        base_cmd: list[str],
+        extra_args: list[str],
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [*base_cmd, *extra_args],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
+            check=False,
         )
-        if result.returncode == 0:
-            return
-
-        # Batch install failed. Fall back to per-package installs so one
-        # unpublished or dev-only version doesn't block the entire run.
-        logger.debug("Batch install failed, falling back to individual installs")
-        for spec in specs:
-            arg = self._spec_to_install_arg(spec)
-            per_pkg = subprocess.run(
-                [*base_cmd, arg],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-            if per_pkg.returncode != 0:
-                fallback = subprocess.run(
-                    [*base_cmd, spec.name],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                )
-                if fallback.returncode != 0:
-                    logger.warning(
-                        "Could not install '%s', skipping (license info will be unavailable)",
-                        arg,
-                    )
-                else:
-                    logger.warning(
-                        "Exact version %s not available; "
-                        "installed latest release instead (license may differ)",
-                        arg,
-                    )
 
     @staticmethod
     def _spec_to_install_arg(spec: PackageSpec) -> str:
-        """Format a PackageSpec as a positional arg for `uv pip install`."""
+        """Format a PackageSpec as a positional arg for `pip wheel`."""
         if spec.source_url:
             return f"{spec.name} @ {spec.source_url}"
         return f"{spec.name}{spec.version_constraint}"
-
-    @staticmethod
-    def _find_python(venv_path: Path) -> Path:
-        """Locate the Python binary inside a virtualenv."""
-        python = venv_path / "bin" / "python"
-        if python.exists():
-            return python
-        python = venv_path / "Scripts" / "python.exe"
-        if python.exists():
-            return python
-        msg = f"Python executable not found in {venv_path}"
-        raise FileNotFoundError(msg)
 
     @staticmethod
     def _find_site_packages(venv_path: Path) -> Path | None:

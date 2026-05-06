@@ -10,10 +10,11 @@ from license_audit.environment.provision import EnvironmentProvisioner
 
 
 class TestCurrent:
-    def test_returns_site_packages(self) -> None:
+    def test_returns_reader_pointing_at_site_packages(self) -> None:
         env = EnvironmentProvisioner().current()
-        assert env.site_packages.exists()
-        assert "site-packages" in str(env.site_packages)
+        described = Path(env.reader.describe_source())
+        assert described.exists()
+        assert "site-packages" in str(described)
 
     def test_no_cleanup_needed(self) -> None:
         env = EnvironmentProvisioner().current()
@@ -28,9 +29,9 @@ class TestFromVenv:
         if not venv_path.exists():
             pytest.skip(".venv not found")
         env = EnvironmentProvisioner().from_venv(venv_path)
-        assert env.site_packages.exists()
-        dist_infos = list(env.site_packages.glob("*.dist-info"))
-        assert len(dist_infos) > 0
+        described = Path(env.reader.describe_source())
+        assert described.exists()
+        assert any(described.glob("*.dist-info"))
 
     def test_missing_venv(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):

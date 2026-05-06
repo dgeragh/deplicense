@@ -1,12 +1,12 @@
 """End-to-end ``LicenseAuditor`` tests with real provisioning.
 
 These tests run the unmocked auditor against synthetic ``tmp_path`` projects
-covering every source format. They verify the spec to ``uv pip install`` to
+covering every source format. They verify the spec to ``pip wheel`` to
 metadata read to report flow per format, plus that config (overrides, ignored,
 groups) reaches the produced ``AnalysisReport``.
 
-Slower than unit tests because each invocation provisions a small temp
-environment via uv. Lives in ``tests/integration`` so the unit suite stays fast.
+Slower than unit tests because each invocation provisions a small temp wheel
+directory via pip. Lives in ``tests/integration`` so the unit suite stays fast.
 """
 
 from __future__ import annotations
