@@ -221,17 +221,25 @@ class PolicyEngine:
             or pkg.category == LicenseCategory.UNKNOWN
         )
 
-    @staticmethod
-    def unknown_message(pkg: PackageLicense) -> str:
+    def unknown_message(self, pkg: PackageLicense) -> str:
         """User-facing explanation for why a package's license is unknown."""
+        suffix = "Add an override in [tool.license-audit.overrides] or check manually."
+
         if pkg.license_expression == UNKNOWN_LICENSE:
-            detail = f"License for '{pkg.name}' could not be detected."
-        else:
-            detail = (
+            return f"License for '{pkg.name}' could not be detected. {suffix}"
+
+        components = self._expression.unknown_components(pkg.license_expression)
+        if not components or (
+            len(components) == 1 and components[0] == pkg.license_expression
+        ):
+            return (
                 f"License '{pkg.license_expression}' for '{pkg.name}' "
-                f"is not a recognized SPDX expression."
+                f"is not a recognized SPDX expression. {suffix}"
             )
+
+        label = "component" if len(components) == 1 else "components"
+        ids = ", ".join(f"'{c}'" for c in components)
         return (
-            f"{detail} Add an override in [tool.license-audit.overrides] "
-            f"or check manually."
+            f"Could not classify license {label} {ids} in "
+            f"'{pkg.license_expression}' for '{pkg.name}'. {suffix}"
         )

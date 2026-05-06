@@ -13,6 +13,20 @@ class TestRecommend:
         assert len(result) > 0
         assert "MIT" in result
 
+    def test_curated_picks_beat_alphabetical(self) -> None:
+        """Mainstream picks (MIT, Apache-2.0) should appear before
+        alphabetically-earlier permissive licenses (Apache-1.0)."""
+        result = LicenseRecommender().recommend(["MIT"])
+        assert "MIT" in result
+        assert "Apache-1.0" in result
+        assert result.index("MIT") < result.index("Apache-1.0")
+        assert result.index("Apache-2.0") < result.index("Apache-1.0")
+
+    def test_curated_order_within_permissive(self) -> None:
+        result = LicenseRecommender().recommend(["MIT"])
+        assert result.index("MIT") < result.index("Apache-2.0")
+        assert result.index("Apache-2.0") < result.index("BSD-2-Clause")
+
     def test_gpl_dep_restricts(self) -> None:
         result = LicenseRecommender().recommend(["MIT", "GPL-3.0-only"])
         assert "MIT" not in result

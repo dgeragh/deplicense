@@ -352,6 +352,25 @@ class TestBuildActionItems:
         warnings = [i for i in items if "not a recognized SPDX" in i.message]
         assert len(warnings) == 1
 
+    def test_and_expression_names_unclassifiable_component(self) -> None:
+        """Pkg with a parseable expression where only one AND component is
+        UNKNOWN should call out that component by name, not the whole expr."""
+        pkg = PackageLicense(
+            name="numpy",
+            version="1.0",
+            license_expression="BSD-3-Clause AND CC0-1.0",
+            category=LicenseCategory.UNKNOWN,
+        )
+        items = PolicyEngine().build_action_items([pkg], [], LicenseAuditConfig())
+        warnings = [
+            i for i in items if i.severity == "warning" and i.package == "numpy"
+        ]
+        assert len(warnings) == 1
+        msg = warnings[0].message
+        assert "'CC0-1.0'" in msg
+        assert "BSD-3-Clause" not in msg.split("in '")[0]  # Only in the expr echo
+        assert "not a recognized SPDX" not in msg
+
     def test_copyleft_warning_for_strong(self) -> None:
         config = LicenseAuditConfig(policy=PolicyLevel.NETWORK_COPYLEFT)
         items = PolicyEngine().build_action_items([_GPL], [], config)

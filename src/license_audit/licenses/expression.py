@@ -50,6 +50,18 @@ class ExpressionEvaluator:
         best = min(non_empty, key=self._alt_rank)
         return list(dict.fromkeys(best))
 
+    def unknown_components(self, expr: str) -> list[str]:
+        """Ids in the chosen alternative that classify as UNKNOWN."""
+        non_empty = [alt for alt in self.alternatives(expr) if alt]
+        if not non_empty:
+            return []
+        best = min(non_empty, key=self._alt_rank)
+        return [
+            lic
+            for lic in dict.fromkeys(best)
+            if self._classifier.classify(lic) == LicenseCategory.UNKNOWN
+        ]
+
     def classify(self, expr: str) -> LicenseCategory:
         """Category of the best-case alternative for `expr`."""
         non_empty = [alt for alt in self.alternatives(expr) if alt]
