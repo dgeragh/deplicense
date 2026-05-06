@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from license_audit.core.models import UNKNOWN_LICENSE, AnalysisReport, LicenseCategory
+from license_audit.core.models import AnalysisReport, LicenseCategory
 from license_audit.reports._format import (
     ActionItemFormatter,
     IncompatiblePairFormatter,
@@ -135,7 +135,7 @@ class TerminalRenderer:
     def _render_summary(self, report: AnalysisReport) -> None:
         total = len(report.packages)
         unknown = sum(
-            1 for p in report.packages if p.license_expression == UNKNOWN_LICENSE
+            1 for p in report.packages if p.category == LicenseCategory.UNKNOWN
         )
         copyleft = sum(
             1

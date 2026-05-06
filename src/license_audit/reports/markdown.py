@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from license_audit.core.classifier import LicenseClassifier
-from license_audit.core.models import UNKNOWN_LICENSE, AnalysisReport, LicenseCategory
+from license_audit.core.models import AnalysisReport, LicenseCategory
 from license_audit.reports._format import (
     ActionItemFormatter,
     IncompatiblePairFormatter,
@@ -44,7 +44,7 @@ class MarkdownRenderer:
     def _summary(self, report: AnalysisReport) -> str:
         total = len(report.packages)
         unknown = sum(
-            1 for p in report.packages if p.license_expression == UNKNOWN_LICENSE
+            1 for p in report.packages if p.category == LicenseCategory.UNKNOWN
         )
         copyleft = sum(
             1
