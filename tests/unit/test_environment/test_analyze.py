@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -93,6 +94,41 @@ class TestAnalyzeEnvironmentFakeSitePackages:
         names = {p.name for p in tree.flatten()}
         assert "rootpkg" in names
         assert "leaf" in names
+
+    def test_walks_arbitrarily_deep_transitive_chain(self, tmp_path: Path) -> None:
+        """A 5-level chain (root -> a -> b -> c -> d -> e) must surface every level.
+
+        Pins the contract that `_resolve_package` recurses without depth limit
+        — only cycles are broken via the visited set.
+        """
+        chain = ["root", "a", "b", "c", "d", "e"]
+        for current, nxt in pairwise(chain):
+            _make_dist_info(
+                tmp_path,
+                current,
+                "1.0",
+                license_expression="MIT",
+                requires=[f"{nxt}>=1.0"],
+            )
+        _make_dist_info(tmp_path, chain[-1], "1.0", license_expression="MIT")
+
+        reader = MetadataReader.from_site_packages(tmp_path)
+        tree = analyze_environment("root", reader)
+        names = {p.name for p in tree.flatten()}
+        assert names >= set(chain)
+
+    def test_dependency_cycle_does_not_recurse_forever(self, tmp_path: Path) -> None:
+        """If A depends on B and B depends back on A, we still terminate."""
+        _make_dist_info(
+            tmp_path, "a", "1.0", license_expression="MIT", requires=["b>=1.0"]
+        )
+        _make_dist_info(
+            tmp_path, "b", "1.0", license_expression="MIT", requires=["a>=1.0"]
+        )
+        reader = MetadataReader.from_site_packages(tmp_path)
+        tree = analyze_environment("a", reader)
+        names = {p.name for p in tree.flatten()}
+        assert names >= {"a", "b"}
 
     def test_orphan_packages_appended(self, tmp_path: Path) -> None:
         """Packages unreachable from the root still appear in the tree."""
