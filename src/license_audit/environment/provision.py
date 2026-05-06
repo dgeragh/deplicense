@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
+from rich.console import Console
+from rich.status import Status
+
 from license_audit.sources.base import PackageSpec
 from license_audit.util import MetadataReader
 
@@ -45,6 +48,10 @@ class ProvisionedEnv:
 class EnvironmentProvisioner:
     """Creates or attaches to the Python environment we analyze."""
 
+    def __init__(self, console: Console | None = None) -> None:
+        # Spinner output goes to stderr so stdout (e.g. piped JSON) stays clean.
+        self._console = console or Console(stderr=True)
+
     def current(self) -> ProvisionedEnv:
         """Use the interpreter running license_audit itself."""
         site_packages = Path(sysconfig.get_path("purelib"))
@@ -74,7 +81,9 @@ class EnvironmentProvisioner:
         try:
             wheel_dir = Path(tmp_dir.name) / "wheels"
             wheel_dir.mkdir()
-            self._download_wheels(specs, wheel_dir)
+            label = self._provision_label(specs)
+            with self._console.status(label, spinner="dots") as status:
+                self._download_wheels(specs, wheel_dir, status)
         except subprocess.CalledProcessError as e:
             atexit.unregister(tmp_dir.cleanup)
             tmp_dir.cleanup()
@@ -105,6 +114,7 @@ class EnvironmentProvisioner:
         self,
         specs: list[PackageSpec],
         wheel_dir: Path,
+        status: Status,
     ) -> None:
         if not specs:
             return
@@ -116,11 +126,14 @@ class EnvironmentProvisioner:
         if result.returncode == 0:
             return
 
-        # Retry one spec at a time so a single yanked or unpublished
-        # version doesn't kill the rest.
+        # Retry one spec at a time so a single yanked or unpublished version doesn't
+        # kill the rest.
         logger.debug("Batch wheel build failed, falling back to individual builds")
-        for spec in specs:
+        for index, spec in enumerate(specs, start=1):
             arg = self._spec_to_install_arg(spec)
+            status.update(
+                f"Resolving package by package ({index}/{len(specs)}): {spec.name}…"
+            )
             per_pkg = self._run_pip(base_cmd, [arg])
             if per_pkg.returncode == 0:
                 continue
@@ -137,6 +150,12 @@ class EnvironmentProvisioner:
                     "built latest release instead (license may differ)",
                     arg,
                 )
+
+    @staticmethod
+    def _provision_label(specs: list[PackageSpec]) -> str:
+        n = len(specs)
+        suffix = "" if n == 1 else "s"
+        return f"Provisioning {n} top-level package{suffix} via pip wheel…"
 
     @staticmethod
     def _run_pip(

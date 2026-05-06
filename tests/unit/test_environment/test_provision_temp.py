@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.console import Console
 
 from license_audit.environment.provision import (
     EnvironmentProvisioner,
@@ -241,6 +242,73 @@ class TestTempCleanup:
             pytest.raises(RuntimeError, match="Failed to provision"),
         ):
             provisioner.temp([PackageSpec(name="click", version_constraint=">=8.0")])
+
+
+class TestProvisionLabel:
+    def test_singular(self) -> None:
+        spec = PackageSpec(name="click", version_constraint="")
+        label = EnvironmentProvisioner._provision_label([spec])
+        assert "1 top-level package " in label
+        assert "pip wheel" in label
+
+    def test_plural(self) -> None:
+        specs = [
+            PackageSpec(name="click", version_constraint=""),
+            PackageSpec(name="rich", version_constraint=""),
+        ]
+        label = EnvironmentProvisioner._provision_label(specs)
+        assert "2 top-level packages" in label
+
+
+class TestStatusSpinner:
+    def test_status_opened_with_provisioning_label(self, tmp_path: Path) -> None:
+        console = MagicMock(spec=Console)
+        provisioner = EnvironmentProvisioner(console=console)
+
+        def fake_run(
+            base_cmd: list[str], extra_args: list[str]
+        ) -> subprocess.CompletedProcess[str]:
+            wheel_dir = Path(base_cmd[base_cmd.index("-w") + 1])
+            _write_fake_wheel(wheel_dir, "click", "8.0.0")
+            return _ok()
+
+        spec = PackageSpec(name="click", version_constraint=">=8.0")
+        with patch.object(EnvironmentProvisioner, "_run_pip", side_effect=fake_run):
+            provisioner.temp([spec]).cleanup()
+
+        console.status.assert_called_once()
+        label = console.status.call_args.args[0]
+        assert "Provisioning" in label
+        assert "1 top-level package" in label
+
+    def test_status_updates_during_per_package_fallback(self, tmp_path: Path) -> None:
+        console = MagicMock(spec=Console)
+        # MagicMock auto-creates `.status(...)` and its returned context manager,
+        # so `with console.status(...) as status` yields a MagicMock we can inspect.
+        provisioner = EnvironmentProvisioner(console=console)
+
+        def fake_run(
+            base_cmd: list[str], extra_args: list[str]
+        ) -> subprocess.CompletedProcess[str]:
+            wheel_dir = Path(base_cmd[base_cmd.index("-w") + 1])
+            if len(extra_args) > 1:
+                return _ok(returncode=1)  # batch fails
+            _write_fake_wheel(wheel_dir, extra_args[0].split(">=")[0], "1.0")
+            return _ok()
+
+        specs = [
+            PackageSpec(name="click", version_constraint=">=8.0"),
+            PackageSpec(name="rich", version_constraint=">=13.0"),
+        ]
+        with patch.object(EnvironmentProvisioner, "_run_pip", side_effect=fake_run):
+            provisioner.temp(specs).cleanup()
+
+        status = console.status.return_value.__enter__.return_value
+        update_messages = [c.args[0] for c in status.update.call_args_list]
+        assert any("click" in m for m in update_messages)
+        assert any("rich" in m for m in update_messages)
+        assert any("(1/2)" in m for m in update_messages)
+        assert any("(2/2)" in m for m in update_messages)
 
 
 class TestProvisionedEnvCleanup:
