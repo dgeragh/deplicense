@@ -13,6 +13,7 @@ from license_audit.core.models import (
     UNKNOWN_LICENSE,
     AnalysisReport,
     DependencyNode,
+    LicenseCategory,
     PackageLicense,
 )
 from license_audit.core.policy import PolicyEngine
@@ -162,13 +163,16 @@ class LicenseAuditor:
             self._apply_ignores(packages, config.ignored_packages)
 
             dep_packages = [p for p in packages if p.name != canonicalize(project_name)]
-            # Ignored packages don't constrain recommendations or produce
-            # conflicts; they've been exempted by config.
             active_packages = [p for p in dep_packages if not p.ignored]
             dep_licenses = [p.license_expression for p in active_packages]
             dep_spdx_ids = self._extract_spdx_ids(dep_licenses)
 
-            recommended = self._recommender.recommend(dep_licenses)
+            has_unknown = any(
+                p.category == LicenseCategory.UNKNOWN for p in active_packages
+            )
+            recommended = (
+                [] if has_unknown else self._recommender.recommend(dep_licenses)
+            )
             incompatible = self._matrix.find_incompatible_pairs(dep_spdx_ids)
             action_items = self._policy.build_action_items(
                 dep_packages,

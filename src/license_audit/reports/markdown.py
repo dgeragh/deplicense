@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from license_audit.core.classifier import LicenseClassifier
-from license_audit.core.models import AnalysisReport
+from license_audit.core.models import AnalysisReport, LicenseCategory
 from license_audit.reports._format import (
     ActionItemFormatter,
     IncompatiblePairFormatter,
@@ -128,26 +128,40 @@ class MarkdownRenderer:
 
     def _recommendations(self, report: AnalysisReport) -> str:
         if not report.recommended_licenses:
-            lines = [
-                "\n## Recommended Licenses\n",
-                "No compatible outbound license found.",
+            unknown = [
+                p
+                for p in report.packages
+                if not p.ignored and p.category == LicenseCategory.UNKNOWN
             ]
-            if report.incompatible_pairs:
-                pairs = ", ".join(
-                    f"{p.inbound} / {p.outbound}" for p in report.incompatible_pairs
-                )
+            lines = ["\n## Recommended Licenses\n"]
+            if unknown:
+                names = ", ".join(f"`{p.name}`" for p in unknown)
                 lines.append(
-                    f"The following license pairs have no common outbound license: {pairs}."
-                )
-                lines.append(
-                    "Consider adding an override in `[tool.license-audit.overrides]` if the "
-                    "detected license is incorrect, or replacing the conflicting dependency."
+                    f"Cannot recommend a license: {len(unknown)} dependency(ies) "
+                    f"have an unrecognized license ({names}). "
+                    "Resolve them via `[tool.license-audit.overrides]` and re-run."
                 )
             else:
-                lines.append(
-                    "Your dependencies have license requirements that could not be "
-                    "reconciled. Check the Compatibility Analysis section for details."
-                )
+                lines.append("No compatible outbound license found.")
+                if report.incompatible_pairs:
+                    pairs = ", ".join(
+                        f"{p.inbound} / {p.outbound}" for p in report.incompatible_pairs
+                    )
+                    lines.append(
+                        f"The following license pairs have no common outbound "
+                        f"license: {pairs}."
+                    )
+                    lines.append(
+                        "Consider adding an override in "
+                        "`[tool.license-audit.overrides]` if the detected license "
+                        "is incorrect, or replacing the conflicting dependency."
+                    )
+                else:
+                    lines.append(
+                        "Your dependencies have license requirements that could not "
+                        "be reconciled. Check the Compatibility Analysis section for "
+                        "details."
+                    )
             return "\n".join(lines) + "\n"
 
         top = report.recommended_licenses[:10]

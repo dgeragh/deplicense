@@ -89,3 +89,57 @@ class TestTerminalRenderer:
         )
         assert "Source:" in buf.getvalue()
         assert "/abs/uv.lock" in buf.getvalue()
+
+
+class TestTerminalRendererMarkupSafety:
+    """User-controlled text must not be interpreted as Rich markup."""
+
+    def test_ignore_reason_with_brackets_preserved(self) -> None:
+        from license_audit.core.models import (
+            LicenseCategory,
+            LicenseSource,
+            PackageLicense,
+        )
+
+        console, buf = _make_console()
+        report = AnalysisReport(
+            project_name="p",
+            packages=[
+                PackageLicense(
+                    name="some_pkg",
+                    version="1.0",
+                    license_expression="GPL-3.0-only",
+                    license_source=LicenseSource.METADATA,
+                    category=LicenseCategory.STRONG_COPYLEFT,
+                    ignored=True,
+                    ignore_reason="Doesn't apply [see issue #123]",
+                )
+            ],
+        )
+        TerminalRenderer(console=console).render(report)
+        output = buf.getvalue()
+        assert "[see issue #123]" in output
+
+    def test_license_expression_with_brackets_preserved(self) -> None:
+        from license_audit.core.models import (
+            LicenseCategory,
+            LicenseSource,
+            PackageLicense,
+        )
+
+        console, buf = _make_console()
+        report = AnalysisReport(
+            project_name="p",
+            packages=[
+                PackageLicense(
+                    name="weird_pkg",
+                    version="1.0",
+                    license_expression="MIT [internal use only]",
+                    license_source=LicenseSource.OVERRIDE,
+                    category=LicenseCategory.PERMISSIVE,
+                )
+            ],
+        )
+        TerminalRenderer(console=console).render(report)
+        output = buf.getvalue()
+        assert "[internal use only]" in output

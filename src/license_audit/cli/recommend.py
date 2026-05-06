@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from license_audit.cli._common import resolve_config, run_audit
@@ -124,10 +125,12 @@ def recommend_cmd(ctx: click.Context) -> None:
 def _find_most_restrictive(
     packages: list[PackageLicense],
 ) -> tuple[LicenseCategory, PackageLicense | None]:
-    """Return the package with the most restrictive license category."""
+    """Most restrictive package category, ignoring exempted packages."""
     most_cat = LicenseCategory.PERMISSIVE
     most_pkg: PackageLicense | None = None
     for pkg in packages:
+        if pkg.ignored:
+            continue
         if CATEGORY_RANK.get(pkg.category, 0) > CATEGORY_RANK.get(most_cat, 0):
             most_cat = pkg.category
             most_pkg = pkg
@@ -143,7 +146,7 @@ def _render_constraint(
     if pkg and category != LicenseCategory.PERMISSIVE:
         console.print(
             f"[bold yellow]Most restrictive dependency:[/bold yellow] "
-            f"{pkg.name} ({pkg.license_expression})"
+            f"{pkg.name} ({escape(pkg.license_expression)})"
         )
         desc = CategoryDescriptions.describe(category)
         if desc:
@@ -154,14 +157,28 @@ def _render_constraint(
 def _render_recommendations(console: Console, report: AnalysisReport) -> None:
     """Print the recommended licenses and guidance panel."""
     if not report.recommended_licenses:
-        console.print(
-            "[bold red]No compatible outbound license found![/bold red]\n"
-            "Your dependencies have conflicting license requirements."
-        )
-        if report.incompatible_pairs:
-            console.print("\n[bold]Conflicting pairs:[/bold]")
-            for pair in report.incompatible_pairs:
-                console.print(IncompatiblePairFormatter.rich(pair))
+        unknown = [
+            p
+            for p in report.packages
+            if not p.ignored and p.category == LicenseCategory.UNKNOWN
+        ]
+        if unknown:
+            names = ", ".join(p.name for p in unknown)
+            console.print(
+                "[bold yellow]Cannot recommend a license:[/bold yellow] "
+                f"{len(unknown)} dependency(ies) have an unrecognized license "
+                f"({names}).\n"
+                r"Resolve them via `\[tool.license-audit.overrides]` and re-run."
+            )
+        else:
+            console.print(
+                "[bold red]No compatible outbound license found![/bold red]\n"
+                "Your dependencies have conflicting license requirements."
+            )
+            if report.incompatible_pairs:
+                console.print("\n[bold]Conflicting pairs:[/bold]")
+                for pair in report.incompatible_pairs:
+                    console.print(IncompatiblePairFormatter.rich(pair))
         return
 
     top = report.recommended_licenses[:5]
