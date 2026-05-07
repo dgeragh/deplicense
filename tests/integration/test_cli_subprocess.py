@@ -10,7 +10,7 @@ subprocess so they catch what in-process ``CliRunner`` tests can't:
 - ``warnings.warn`` from inside the analyzer reaches the user's stderr.
 
 Each test provisions a synthetic project under ``tmp_path``. The provisioning
-step (``uv pip install`` of small real packages) makes these noticeably slower
+step (``pip wheel`` of small real packages) makes these noticeably slower
 than the unit suite, hence their separate location under ``tests/integration``.
 """
 
@@ -92,7 +92,8 @@ class TestEntryPoint:
     def test_version_runs_and_exits_zero(self) -> None:
         result = _run(["--version"])
         assert result.returncode == 0
-        assert "license-audit, version" in result.stdout
+        assert result.stdout.lower().startswith("license-audit")
+        assert ", version " in result.stdout
 
     def test_help_runs_and_exits_zero(self) -> None:
         result = _run(["--help"])

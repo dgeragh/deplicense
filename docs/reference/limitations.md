@@ -28,9 +28,9 @@ PyPI packages use inconsistent license strings. license-audit normalizes 60+ com
 
 Dependency markers (platform, Python version, extras) are evaluated against the current runtime. Dependencies that are conditional on a different platform or Python version aren't included.
 
-## uv is required for temp environments
+## A C toolchain may be needed for some dependencies
 
-Analyzing a dependency file or project directory creates a temp environment via uv. If uv isn't installed, those targets fail. Direct venv and current-environment analysis don't need uv.
+Analyzing a dependency file or project directory downloads wheels and (when no wheel is published for a package) builds the source distribution into a wheel via PEP 517 isolated builds. Most of PyPI ships pre-built wheels, but for the small minority that don't (and that contain C extensions) `pip wheel` will need a working C toolchain (e.g. `build-essential` on Linux, the Xcode Command Line Tools on macOS, Visual Studio Build Tools on Windows). When the build fails, license-audit logs a warning and continues; that package's license info will be unavailable until you supply a `[tool.license-audit.overrides]` entry or install the toolchain. Direct venv and current-environment analysis aren't affected.
 
 ## Not legal advice
 

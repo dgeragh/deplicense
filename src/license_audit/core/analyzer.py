@@ -13,6 +13,7 @@ from license_audit.core.models import (
     UNKNOWN_LICENSE,
     AnalysisReport,
     DependencyNode,
+    LicenseCategory,
     PackageLicense,
 )
 from license_audit.core.policy import PolicyEngine
@@ -26,7 +27,7 @@ from license_audit.licenses.expression import ExpressionEvaluator
 from license_audit.licenses.spdx import SpdxNormalizer
 from license_audit.sources.base import PackageSpec, Source
 from license_audit.sources.factory import SourceFactory
-from license_audit.util import MetadataReader, canonicalize
+from license_audit.util import canonicalize
 
 
 @dataclass
@@ -106,7 +107,6 @@ class LicenseAuditor:
         normalizer: SpdxNormalizer | None = None,
         recommender: LicenseRecommender | None = None,
         policy: PolicyEngine | None = None,
-        metadata_reader: MetadataReader | None = None,
         expression: ExpressionEvaluator | None = None,
     ) -> None:
         self._matrix = matrix or CompatibilityMatrix()
@@ -132,7 +132,6 @@ class LicenseAuditor:
             source_factory=self._sources,
             provisioner=self._provisioner,
         )
-        self._metadata_reader = metadata_reader or MetadataReader()
 
     def run(
         self,
@@ -164,13 +163,16 @@ class LicenseAuditor:
             self._apply_ignores(packages, config.ignored_packages)
 
             dep_packages = [p for p in packages if p.name != canonicalize(project_name)]
-            # Ignored packages don't constrain recommendations or produce
-            # conflicts; they've been exempted by config.
             active_packages = [p for p in dep_packages if not p.ignored]
             dep_licenses = [p.license_expression for p in active_packages]
             dep_spdx_ids = self._extract_spdx_ids(dep_licenses)
 
-            recommended = self._recommender.recommend(dep_licenses)
+            has_unknown = any(
+                p.category == LicenseCategory.UNKNOWN for p in active_packages
+            )
+            recommended = (
+                [] if has_unknown else self._recommender.recommend(dep_licenses)
+            )
             incompatible = self._matrix.find_incompatible_pairs(dep_spdx_ids)
             action_items = self._policy.build_action_items(
                 dep_packages,
@@ -250,12 +252,12 @@ class LicenseAuditor:
             pkg_extras = {s.name: s.extras for s in specs if s.extras}
             return analyze_installed_packages(
                 project_name,
-                env.site_packages,
+                env.reader,
                 [s.name for s in specs],
                 overrides,
                 pkg_extras,
             )
-        return analyze_environment(project_name, env.site_packages, overrides)
+        return analyze_environment(project_name, env.reader, overrides)
 
     def _classify_packages(self, packages: list[PackageLicense]) -> None:
         for pkg in packages:
@@ -271,10 +273,7 @@ class LicenseAuditor:
         env: ProvisionedEnv,
     ) -> None:
         for pkg in packages:
-            pkg.license_text = self._metadata_reader.read_license_text(
-                pkg.name,
-                env.site_packages,
-            )
+            pkg.license_text = env.reader.read_license_text(pkg.name)
 
     def _apply_ignores(
         self,

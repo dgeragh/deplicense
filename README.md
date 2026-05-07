@@ -73,7 +73,7 @@ Exit codes:
 | Code | Meaning |
 |------|---------|
 | `0` | All dependencies pass the policy |
-| `1` | Policy violation (incompatible pairs or denied licenses) |
+| `1` | Policy violation (incompatible pairs, denied licenses, or category exceeded) |
 | `2` | Unknown licenses detected (when `fail-on-unknown = true`) |
 
 For GitLab, pre-commit, handling unknowns, and the new-dependency workflow, see the [CI integration guide](https://dgeragh.github.io/license-audit/latest/user-guide/ci-integration/).

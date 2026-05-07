@@ -12,8 +12,8 @@ from license_audit.licenses.detection import (
     _try_license_field,
     _try_pep639,
     detect_license,
-    detect_license_from_path,
 )
+from license_audit.util import MetadataReader
 
 
 def _make_metadata(**headers: str | list[str]) -> Message:
@@ -29,34 +29,45 @@ def _make_metadata(**headers: str | list[str]) -> Message:
     return msg
 
 
+def _write_dist_info(
+    site_packages: Path,
+    name: str,
+    version: str,
+    metadata_extra: str = "",
+) -> None:
+    dist_info = site_packages / f"{name}-{version}.dist-info"
+    dist_info.mkdir(parents=True)
+    (dist_info / "METADATA").write_text(
+        f"Metadata-Version: 2.4\nName: {name}\nVersion: {version}\n{metadata_extra}"
+    )
+
+
 class TestDetectLicense:
-    def test_override_takes_precedence(self) -> None:
-        expr, source = detect_license("click", overrides={"click": "BSD-2-Clause"})
-        assert expr == "BSD-2-Clause"
-        assert source == LicenseSource.OVERRIDE
-
-    def test_installed_package(self) -> None:
-        # click should be installed in the test env
-        expr, source = detect_license("click")
-        assert expr != "UNKNOWN"
-        assert source != LicenseSource.UNKNOWN
-
-    def test_nonexistent_package(self) -> None:
-        expr, source = detect_license("this_package_does_not_exist_xyz_123")
-        assert expr == "UNKNOWN"
-        assert source == LicenseSource.UNKNOWN
-
-
-class TestDetectLicenseFromPath:
     def test_override_takes_precedence(self, tmp_path: Path) -> None:
-        expr, source = detect_license_from_path(
-            "mypkg", tmp_path, overrides={"mypkg": "Apache-2.0"}
+        reader = MetadataReader.from_site_packages(tmp_path)
+        expr, source = detect_license(
+            "mypkg",
+            reader,
+            overrides={"mypkg": "Apache-2.0"},
         )
         assert expr == "Apache-2.0"
         assert source == LicenseSource.OVERRIDE
 
-    def test_nonexistent_package_in_site_packages(self, tmp_path: Path) -> None:
-        expr, source = detect_license_from_path("nonexistent", tmp_path)
+    def test_reads_from_dist_info(self, tmp_path: Path) -> None:
+        _write_dist_info(
+            tmp_path,
+            "tools",
+            "1.0.0",
+            metadata_extra="License-Expression: MIT\n",
+        )
+        reader = MetadataReader.from_site_packages(tmp_path)
+        expr, source = detect_license("tools", reader)
+        assert expr == "MIT"
+        assert source == LicenseSource.PEP639
+
+    def test_nonexistent_package(self, tmp_path: Path) -> None:
+        reader = MetadataReader.from_site_packages(tmp_path)
+        expr, source = detect_license("nonexistent", reader)
         assert expr == "UNKNOWN"
         assert source == LicenseSource.UNKNOWN
 
@@ -128,9 +139,7 @@ class TestTryClassifiers:
 
     def test_unrecognized_license_classifier(self) -> None:
         meta = _make_metadata(Classifier=["License :: Other/Proprietary License"])
-        # normalize_classifier may return None for this
         result = _try_classifiers(meta)
-        # If the classifier isn't recognized, result should be None
         if result is not None:
             assert result[1] == LicenseSource.CLASSIFIER
 

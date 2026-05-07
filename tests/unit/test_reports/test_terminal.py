@@ -89,3 +89,75 @@ class TestTerminalRenderer:
         )
         assert "Source:" in buf.getvalue()
         assert "/abs/uv.lock" in buf.getvalue()
+
+
+class TestCategoryColors:
+    def test_every_category_has_a_color(self) -> None:
+        from license_audit.core.models import LicenseCategory
+
+        for category in LicenseCategory:
+            assert category in TerminalRenderer.CATEGORY_COLORS
+            assert TerminalRenderer.CATEGORY_COLORS[category]
+
+    def test_categories_have_distinct_colors(self) -> None:
+        colors = list(TerminalRenderer.CATEGORY_COLORS.values())
+        assert len(colors) == len(set(colors))
+
+    def test_unknown_is_more_prominent_than_dim(self) -> None:
+        from license_audit.core.models import LicenseCategory
+
+        assert TerminalRenderer.CATEGORY_COLORS[LicenseCategory.UNKNOWN] != "dim"
+
+
+class TestTerminalRendererMarkupSafety:
+    """User-controlled text must not be interpreted as Rich markup."""
+
+    def test_ignore_reason_with_brackets_preserved(self) -> None:
+        from license_audit.core.models import (
+            LicenseCategory,
+            LicenseSource,
+            PackageLicense,
+        )
+
+        console, buf = _make_console()
+        report = AnalysisReport(
+            project_name="p",
+            packages=[
+                PackageLicense(
+                    name="some_pkg",
+                    version="1.0",
+                    license_expression="GPL-3.0-only",
+                    license_source=LicenseSource.METADATA,
+                    category=LicenseCategory.STRONG_COPYLEFT,
+                    ignored=True,
+                    ignore_reason="Doesn't apply [see issue #123]",
+                )
+            ],
+        )
+        TerminalRenderer(console=console).render(report)
+        output = buf.getvalue()
+        assert "[see issue #123]" in output
+
+    def test_license_expression_with_brackets_preserved(self) -> None:
+        from license_audit.core.models import (
+            LicenseCategory,
+            LicenseSource,
+            PackageLicense,
+        )
+
+        console, buf = _make_console()
+        report = AnalysisReport(
+            project_name="p",
+            packages=[
+                PackageLicense(
+                    name="weird_pkg",
+                    version="1.0",
+                    license_expression="MIT [internal use only]",
+                    license_source=LicenseSource.OVERRIDE,
+                    category=LicenseCategory.PERMISSIVE,
+                )
+            ],
+        )
+        TerminalRenderer(console=console).render(report)
+        output = buf.getvalue()
+        assert "[internal use only]" in output

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
@@ -20,10 +21,10 @@ class TerminalRenderer:
     CATEGORY_COLORS: dict[LicenseCategory, str] = {
         LicenseCategory.PERMISSIVE: "green",
         LicenseCategory.WEAK_COPYLEFT: "yellow",
-        LicenseCategory.STRONG_COPYLEFT: "red",
-        LicenseCategory.NETWORK_COPYLEFT: "bright_red",
+        LicenseCategory.STRONG_COPYLEFT: "orange1",
+        LicenseCategory.NETWORK_COPYLEFT: "red",
         LicenseCategory.PROPRIETARY: "magenta",
-        LicenseCategory.UNKNOWN: "dim",
+        LicenseCategory.UNKNOWN: "bright_red",
     }
 
     def __init__(self, console: Console | None = None) -> None:
@@ -66,7 +67,7 @@ class TerminalRenderer:
             table.add_row(
                 pkg.name,
                 pkg.version,
-                pkg.license_expression,
+                Text(pkg.license_expression),
                 category_text,
                 pkg.license_source.value,
                 parent,
@@ -83,7 +84,7 @@ class TerminalRenderer:
         self._console.print("[bold]Ignored Packages:[/bold]")
         for pkg in sorted(ignored, key=lambda p: p.name):
             reason = pkg.ignore_reason or "(no reason given)"
-            self._console.print(f"  [dim]- {pkg.name}[/dim]: {reason}")
+            self._console.print(f"  [dim]- {pkg.name}[/dim]: {escape(reason)}")
         self._console.print()
 
     def _render_compatibility(self, report: AnalysisReport) -> None:
@@ -97,15 +98,27 @@ class TerminalRenderer:
 
     def _render_recommendations(self, report: AnalysisReport) -> None:
         if not report.recommended_licenses:
-            self._console.print(
-                "[bold red]No compatible outbound license found![/bold red]",
-            )
-            if report.incompatible_pairs:
-                for pair in report.incompatible_pairs:
-                    self._console.print(
-                        f"  [red]\\[x][/red] {pair.inbound} and {pair.outbound} "
-                        "have no common outbound license",
-                    )
+            unknown = [
+                p
+                for p in report.packages
+                if not p.ignored and p.category == LicenseCategory.UNKNOWN
+            ]
+            if unknown:
+                names = ", ".join(p.name for p in unknown)
+                self._console.print(
+                    "[bold yellow]Cannot recommend a license[/bold yellow] until "
+                    f"{len(unknown)} unrecognized license(s) are resolved: {names}",
+                )
+            else:
+                self._console.print(
+                    "[bold red]No compatible outbound license found![/bold red]",
+                )
+                if report.incompatible_pairs:
+                    for pair in report.incompatible_pairs:
+                        self._console.print(
+                            f"  [red]\\[x][/red] {pair.inbound} and {pair.outbound} "
+                            "have no common outbound license",
+                        )
             self._console.print()
             return
 

@@ -14,6 +14,7 @@
 | Dependency group filtering | Yes (main, dev, optional, PEP 735) | N/A | No | No |
 | Language support | Python | Any | Python | Python |
 | `pyproject.toml` configuration | Yes | No | No | Yes |
-| uv / PEP 639 support | Yes | No | No | No |
+| Reads `uv.lock` / `poetry.lock` / `pixi.lock` | Yes | No | No | No |
+| PEP 639 `License-Expression` | Yes | No | No | No |
 
 license-audit flags dependency conflicts and provides licensing recommendations. If you need file-level scanning across a multi-language codebase, use ScanCode.
