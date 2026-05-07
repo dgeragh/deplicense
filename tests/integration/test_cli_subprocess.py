@@ -92,7 +92,8 @@ class TestEntryPoint:
     def test_version_runs_and_exits_zero(self) -> None:
         result = _run(["--version"])
         assert result.returncode == 0
-        assert "license-audit, version" in result.stdout
+        assert result.stdout.lower().startswith("license-audit")
+        assert ", version " in result.stdout
 
     def test_help_runs_and_exits_zero(self) -> None:
         result = _run(["--help"])
