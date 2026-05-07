@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0 (2026-05-06)
+
+### Changed
+
+- Dropped `uv` as a runtime requirement; temp environment provisioning now uses `pip wheel`
+- Recommended outbound licenses prefer a curated shortlist (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause) before falling back to alphabetical
+- Wider severity gradient on the dependency table; unknown licenses move from dim to bright red
+
+### Added
+
+- Progress spinner during provisioning
+- Windows and macOS in the CI matrix
+- Documentation for the `recommend` and `refresh` commands
+- AND-expression action items name the unrecognized component(s) instead of the whole expression
+
+### Fixed
+
+- `recommend` no longer suggests permissive licenses when an unknown-category dependency is present
+- Ignored packages no longer drive the "most restrictive dependency" line in `recommend`
+- Unknown summary count now includes packages whose category resolves to unknown
+- Brackets in user-supplied ignore reasons and license overrides render correctly in the terminal
+
 ## 0.6.0 (2026-05-05)
 
 ### Fixed
