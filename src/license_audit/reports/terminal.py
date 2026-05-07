@@ -21,10 +21,10 @@ class TerminalRenderer:
     CATEGORY_COLORS: dict[LicenseCategory, str] = {
         LicenseCategory.PERMISSIVE: "green",
         LicenseCategory.WEAK_COPYLEFT: "yellow",
-        LicenseCategory.STRONG_COPYLEFT: "red",
-        LicenseCategory.NETWORK_COPYLEFT: "bright_red",
+        LicenseCategory.STRONG_COPYLEFT: "orange1",
+        LicenseCategory.NETWORK_COPYLEFT: "red",
         LicenseCategory.PROPRIETARY: "magenta",
-        LicenseCategory.UNKNOWN: "dim",
+        LicenseCategory.UNKNOWN: "bright_red",
     }
 
     def __init__(self, console: Console | None = None) -> None:

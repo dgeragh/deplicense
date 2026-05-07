@@ -91,6 +91,24 @@ class TestTerminalRenderer:
         assert "/abs/uv.lock" in buf.getvalue()
 
 
+class TestCategoryColors:
+    def test_every_category_has_a_color(self) -> None:
+        from license_audit.core.models import LicenseCategory
+
+        for category in LicenseCategory:
+            assert category in TerminalRenderer.CATEGORY_COLORS
+            assert TerminalRenderer.CATEGORY_COLORS[category]
+
+    def test_categories_have_distinct_colors(self) -> None:
+        colors = list(TerminalRenderer.CATEGORY_COLORS.values())
+        assert len(colors) == len(set(colors))
+
+    def test_unknown_is_more_prominent_than_dim(self) -> None:
+        from license_audit.core.models import LicenseCategory
+
+        assert TerminalRenderer.CATEGORY_COLORS[LicenseCategory.UNKNOWN] != "dim"
+
+
 class TestTerminalRendererMarkupSafety:
     """User-controlled text must not be interpreted as Rich markup."""
 
